@@ -1,154 +1,177 @@
 <div align="center">
 
-# 🏭 reg-factory
+# 🏭 reg-factory · 全能注册工作台
 
 ### Outlook · Gmail · ChatGPT · Grok · Claude · Gemini · GitHub · Google One
 
 **邮箱注册、平台授权、凭据导出与下游导入的一体化本地控制台**
 
-<p>
-  <img src="https://img.shields.io/badge/Outlook-0078D4?style=for-the-badge&logo=microsoftoutlook&logoColor=white" alt="Outlook" height="34" />
-  &nbsp;
-  <img src="https://img.shields.io/badge/Gmail-EA4335?style=for-the-badge&logo=gmail&logoColor=white" alt="Gmail" height="34" />
-  &nbsp;
-  <img src="https://img.shields.io/badge/ChatGPT-10A37F?style=for-the-badge&logo=openai&logoColor=white" alt="ChatGPT" height="34" />
-  &nbsp;
-  <img src="https://img.shields.io/badge/Grok-000000?style=for-the-badge&logo=x&logoColor=white" alt="Grok" height="34" />
-  &nbsp;
-  <img src="https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude" height="34" />
-  &nbsp;
-  <img src="https://img.shields.io/badge/Gemini-886FBF?style=for-the-badge&logo=googlegemini&logoColor=white" alt="Gemini" height="34" />
-</p>
-
-<p>
-  <img src="https://img.shields.io/badge/QQ%E7%BE%A4-1048143135-12B7F5?style=for-the-badge&logo=qq&logoColor=white" alt="QQ 交流群 1048143135" />
-  &nbsp;
-  <a href="https://t.me/TIANTIANAIPRO">
-    <img src="https://img.shields.io/badge/Telegram-@TIANTIANAIPRO-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram @TIANTIANAIPRO" />
-  </a>
-  &nbsp;
-  <a href="https://linux.do">
-    <img src="https://img.shields.io/badge/Linux.do-Community-F5C400?style=for-the-badge&logo=linux&logoColor=black" alt="Linux.do Community" />
-  </a>
-</p>
-
-<p>
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
-  <img src="https://img.shields.io/badge/Playwright-自动化-2EAD33?style=flat-square" alt="Playwright" />
-  <img src="https://img.shields.io/badge/BitBrowser%20%2F%20AdsPower-指纹隔离-5A4FCF?style=flat-square" alt="Fingerprint Browser" />
-  <img src="https://img.shields.io/badge/Clash%20Verge-节点切换-1F8FFF?style=flat-square" alt="Clash Verge" />
-  <img src="https://img.shields.io/badge/license-educational-lightgrey?style=flat-square" alt="license" />
-</p>
-
 </div>
 
 ---
 
-> **中转站：** [天天 AI Pro](https://tiantianai.pro) · [天天 AI](https://tiantianai.co)
->
-> **卡网地址：** [TTCard](https://ttcard.zeabur.app)
+## 一、安装
 
-项目将 Outlook 邮箱、ChatGPT、Grok、Claude、Kiro 注册，Codex OAuth、账号导出和下游导入整合到同一个 Web 控制台，同时保留可组合的命令行入口。
+### 方式 A：Windows 便携包（推荐）
 
-当前主版本为 `2.0.0`，重点是低成本并发和极致省流：任务按槽位隔离浏览器与住宅出口，代理池不足时自动降并发；住宅流量模式支持 `extreme`，会抑制后台联网并跳过非关键资源。详见 [2.0.0 更新日志](CHANGELOG.md)。
+1. 从 Releases 下载 `reg-factory-windows-x64-<版本>.zip`
+2. 完整解压到任意目录（不要在压缩包预览里直接运行）
+3. 双击 `reg-factory.exe`，浏览器会自动打开控制台
+4. 默认地址 `http://127.0.0.1:8799/`，无需安装 Python
 
-> 仅用于学习、开发和经授权的测试。密钥、账号、Cookie、Token 和运行日志均应保留在本机，不要提交到仓库。
+> 配置和运行数据保存在 `%LOCALAPPDATA%\RegFactory`，升级时直接替换程序目录即可。
 
-## 快速开始
+### 方式 B：从源码运行
 
-第一次使用建议先阅读 [新手教程](docs/getting-started.md)。教程从下载安装开始，按界面顺序说明网络出口、指纹浏览器、Outlook Graph 辅助邮箱、住宅节流、并发、成功率自动停止、结果检查和升级，不要求先理解命令行或 `.env`。
-
-### Windows 便携安装包
-
-从 [Releases](https://github.com/tiantianGPU/reg-factory/releases/latest) 下载 `reg-factory-windows-x64-<版本>.zip`，完整解压后双击 `reg-factory.exe`，程序会自动打开控制台页面。便携包无需安装 Python；浏览器与网络出口按下面的前置条件选择配置。不要直接在 ZIP 压缩包预览窗口中运行 EXE。
-
-默认端口是 `8799`。程序只复用相同版本的现有服务；旧版本占用端口时，新版会自动选择后续空闲端口并打开新版页面。再次双击同一新版会复用已经运行的新版服务。启动失败时错误窗口会保留，便于截图排查。
-
-配置和运行数据默认保存在 `%LOCALAPPDATA%\RegFactory`，升级时直接替换程序目录即可。首次切换到便携包时，如果检测到仍在运行的源码版且其目录包含邮箱、Cookie 或 Token，新版会自动沿用该资产目录。
-
-`1.2.30` 及更早便携版的一键更新启动参数存在问题，需要先从 Releases 手动下载并覆盖安装一次新版。新版的“一键更新”会重试断流下载、校验 SHA-256 与包内版本，并在失败时显示实际原因；数据目录不会随程序目录替换。
-
-为控制体积，Windows 便携包不包含可选子项目；需要完整功能时请使用源码方式安装。
-
-### 从源码运行
-
-运行前需要：
-
+**前置条件：**
 - Python 3.10+
-- 默认使用 [BitBrowser](https://www.bitbrowser.cn/download)，也支持内置 Chromium、自定义 Chrome/Chromium 和 AdsPower
-- [Clash Verge 2.5.2 Windows x64](https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe)（自动/固定节点模式），或一个住宅代理服务
+- [BitBrowser](https://www.bitbrowser.cn/download)（默认指纹浏览器），或 AdsPower / 内置 Chromium
+- [Clash Verge](https://github.com/clash-verge-rev/clash-verge-rev/releases)（Clash 出口模式），或一个住宅代理服务
 
-Windows：
-
+**Windows：**
 ```text
-1. 双击 install.bat
-2. 启动 BitBrowser；使用 Clash 网络模式时同时启动 Clash Verge
+1. 双击 install.bat          ← 创建虚拟环境、安装依赖
+2. 启动 BitBrowser（和 Clash Verge）
 3. 双击 start.bat
 4. 打开 http://127.0.0.1:8799/
 ```
 
-macOS / Linux：
-
+**macOS / Linux：**
 ```bash
 ./install.sh
 ./start.sh
 ```
 
-安装脚本会创建 `.venv`、安装 Python 与 Playwright 依赖，并在缺少时从 `.env.example` 生成 `.env`。详细前置条件和环境变量见 [配置说明](docs/configuration.md)。
+---
 
-## Web 控制台
+## 二、首次配置
 
-主控制台默认监听 `http://127.0.0.1:8799/`，提供以下入口：
+首次打开控制台会弹出新手指南，按顺序完成以下配置即可开始注册：
 
-- 新手指南：首次打开自动引导 Clash External Controller、控制密码、住宅代理、继承全局、浏览器、Outlook Graph 辅助邮箱、接码、资产 API 和任务勾选配置；支持按阶段跳过并从顶栏重新打开。
-- 任务库：按流程分类选择任务，只展示常用参数，低频参数收进“更多设置”。
-- 运行日志：实时查看输出和结果状态；可停止当前任务树，或一键清理新旧版本遗留的全部注册任务。
-- 邮箱池：批量导入 Outlook 各地域域名、Hotmail/Live/MSN、iCloud 和自定义邮箱；兼容 JSON、RT/client_id 正反顺序及多种分隔符。
-- 资产 API：直接领取本地尚未领取的邮箱或平台账号，不在取件前在线检测；邮箱可选“仅领取最近扫描为正常”，同一账号跨输出格式只返回一次。
-- 号池扫描：同平台低频串行、近期结果自动复用，遇到限流或连续风控响应自动暂停；按需校验 Outlook、ChatGPT、Claude、Grok 和 Kiro，并标注 ChatGPT Plus 免费试用资格。
-- 网络出口：切换 Clash 自动轮换、固定节点或动态住宅 IP，并测试公网出口。
-- 环境配置：分组编辑 `.env` 并测试外部服务连通性。
-- Plus Codex 导入：使用已经开通 Plus 的 ChatGPT 账号，登录后强制完成手机号接码验证，再走 Codex OAuth 并导入 SUB2API；不再执行提链、绑卡或支付。WebUI 支持批量粘贴 Outlook/Hotmail/Live/MSN、iCloud、ChatGPT session Cookie/token 和完整 Codex OAuth JSON，也兼容 RT/client_id 正反顺序及多种分隔符。
+### 1. 网络出口（左侧「网络出口」）
 
-控制台只监听本机。
+控制所有注册任务使用的代理出口。
 
-动态住宅 IP 会在创建新浏览器窗口时写入完整代理认证；轮换后的代理从下一个新窗口开始使用。网络页可分别设置 Outlook、Claude、ChatGPT、Grok、Kiro 和 GitHub 的出口，例如 Outlook 使用 Clash、其他平台使用住宅代理，并可按平台测试真实公网 IP。
+| 模式 | 说明 | 适用场景 |
+|---|---|---|
+| **Clash 自动轮换** | 跟随 Clash Verge 当前节点 | 日常注册 |
+| **Clash 固定节点** | 锁定某个节点不切换 | 需要固定 IP |
+| **动态住宅 IP** | 使用住宅代理池 | 高成功率需求 |
 
-住宅模式默认启用“平衡节流”，浏览器会跳过普通图片、字体和音视频，并保留脚本、样式表以及 Cloudflare、hCaptcha、Arkose、PerimeterX 等验证资源。网络页可以切换到“激进节流”进一步拦截样式表和常见统计请求；Microsoft 登录与 Graph 授权页会保留必要样式表，避免可见状态判断失真。该设置只影响浏览器页面资源，不改变账号 API、代理分配和出口粘性。
+- 填入 Clash 控制器地址（默认 `http://127.0.0.1:9097`）、混合代理地址（默认 `http://127.0.0.1:7897`）
+- 可为每个平台单独设置出口覆盖（Outlook / Claude / ChatGPT / Grok / Kiro / GitHub）
+- 点击「保存并应用」→「应用并测试 IP」验证出口是否生效
 
-并发注册会为每个任务创建独立浏览器 Profile、Cookie 和指纹环境。住宅代理池会按并发槽分配不同端点；没有住宅 IP 时也可把网络模式设为 `clash_fixed`，或在单平台注册任务中指定一个节点，以同一固定公网 IP 并发。`clash_auto` 的节点选择是全局状态，为避免注册中途换 IP 会自动降为单并发。建议先从并发 `2` 开始，固定 Clash 并发需自行承担共享出口带来的关联和限流风险。
+### 2. 指纹浏览器（左侧「环境配置」→ 指纹浏览器分组）
 
-## 本地资产 API
+- 默认使用 BitBrowser，本地 API 通常为 `http://127.0.0.1:54345`
+- 也支持 AdsPower、内置 Chromium、自定义 Chrome
+- 如使用自定义指纹浏览器，填写 API 根地址和可选 Key
 
-本地接口支持按顺序或指定 `index` 领取邮箱、Claude/ChatGPT/Grok Cookie 和 Kiro Builder ID 账号；`format=cookies` 输出浏览器扩展可导入的标准 JSON，并可把 ChatGPT 会话转换为 SUB2API、CPA 或 chatgpt2api 格式。读取请求直接从本地尚未领取的资产中返回数据，不会先发起在线状态检测。邮箱设置 `normal_only=true` 时只使用最近一次扫描缓存筛选正常状态，领取时仍不联网。账号成功返回后会按平台写入领取账本，切换输出格式也不会再次返回；需要复用时必须显式重置领取记录。号池扫描按平台低频串行并自动复用近期结果，接口响应受网络、出口和目标服务风控影响，不能保证是账号的永久状态。控制台左侧打开“资产 API”即可配置访问密钥、生成调用命令和查看状态。默认仅允许本机访问，可配置 `REG_FACTORY_ASSET_API_KEY`。
+### 3. 打码服务（左侧「A 服务配置」→ 验证服务）
+
+O 邮箱注册台的打码方式可选：
+
+| 方式 | 说明 |
+|---|---|
+| **自动** | 按后端已存的 Key 自动选择 |
+| **本地打码** | SwiftShader 本地求解，免 Key |
+| **captcha.run** | 需填 captcha.run Bearer Key |
+| **EzCaptcha** | 需在服务配置页填 Key |
+| **CapSolver** | 需在服务配置页填 Key |
+
+> 选「本地打码」时无需任何 Key，开箱即用。
+
+### 4. 邮箱服务（左侧「A 服务配置」→ 邮箱服务）
+
+- 配置注册用邮箱来源（YYDS 临时邮箱 / iCloud 接码 / 自有 Outlook 等）
+- Outlook Graph 注册需配置可接收验证码的辅助邮箱
+
+---
+
+## 三、功能使用
+
+### O 邮箱注册台（左侧「O 邮箱注册台」）
+
+批量注册 Outlook 邮箱账号。
+
+**操作步骤：**
+1. **代理来源**：选「跟随网络出口（推荐）」→ 自动使用网络出口页 Outlook 配置的出口；也可选 O 代理池或手动代理
+2. **打码方式**：选本地打码（免 Key）或在线打码服务
+3. **captcha.run Key**：选本地打码可留空
+4. **注册数量 / 并发度**：建议从并发 1 开始
+5. **邮箱后缀 / 国家代码**：按需选择
+6. **产出格式**：Graph 四段式 / 六段式 / 双令牌
+7. 点击「开始批次注册」→ 日志区实时显示进度
+8. 需要中止时点旁边的「停止」按钮
+
+**代理池页（O 邮箱注册台 → 代理池 tab）：**
+- 添加代理后点「预检」可检测每个代理的出口 IP
+- 预检结果展示：**IP 地址 · 国家 · 机房/住宅 · 纯净度 · ISP**
+- 纯净度绿色为佳（≥70），橙色次之，红色风险高
+
+### A 自动注册（左侧「A 自动注册」）
+
+注册 Claude / ChatGPT / Grok / Kiro / GitHub 等平台账号。
+
+1. 选择平台 / 注册身份 / 执行方式
+2. 执行方式可选：协议模式 / 后台浏览器自动 / 可视浏览器自动
+3. 「A 服务配置」→「通用策略」可设置默认注册身份、第三方入口和执行方式
+
+### 任务库（左侧「任务库」）
+
+- 按流程分类选择任务卡片，点击直接进入运行页
+- 只展示常用参数，低频参数收进「更多设置」
+
+### 账号资产（左侧「账号资产」）
+
+- 查看本机全部账号凭据（含密码）
+- 支持导出全部、刷新
+
+### 资产 API（左侧「资产 API」）
+
+通过本地 HTTP 接口领取邮箱和平台凭据，供下游程序调用。
 
 ```bash
 # 按顺序取下一个邮箱
 curl "http://127.0.0.1:8799/api/assets/emails?format=json"
 
-# 只领取最近一次扫描为正常的邮箱（领取时不联网检测）
+# 只领取最近扫描为正常的邮箱
 curl "http://127.0.0.1:8799/api/assets/emails?normal_only=true"
 
-# 领取当前未领取列表中的第 3 个 ChatGPT 账号，输出 SUB2API 格式
+# 领取第 3 个 ChatGPT 账号，输出 SUB2API 格式
 curl "http://127.0.0.1:8799/api/assets/cookies/chatgpt?format=sub2api&index=2"
 
-# 指定第 1 个 Claude 账号，输出标准浏览器 Cookie JSON
-curl "http://127.0.0.1:8799/api/assets/cookies/claude?format=cookies&index=0"
-
-# 配置 API Key 后增加鉴权请求头
-curl "http://127.0.0.1:8799/api/assets/cookies/chatgpt?format=cpa" \
-  -H "X-API-Key: your-key"
+# 配置 API Key 后增加鉴权
+curl "http://127.0.0.1:8799/api/assets/cookies/chatgpt?format=cpa" -H "X-API-Key: your-key"
 ```
 
-省略 `index` 时领取当前未领取列表中的第一条；指定 `index` 时从当前未领取范围选择。两种方式都会记录领取，同一平台账号跨格式不重复返回。完整平台格式、响应字段和领取记录重置方式见 [本地资产 API](docs/api.md)。
+- 支持格式：`json` / `cookies` / `sub2api` / `cpa` / `chatgpt2api`
+- 领取后自动记账，同一账号跨格式不重复返回
+- 在资产 API 页可配置访问密钥、生成调用命令
 
-## 常用命令
+### Plus 导入（左侧「Plus 导入」）
+
+使用已开通 Plus 的 ChatGPT 账号 → 手机号接码验证 → Codex OAuth → 导入 SUB2API。
+
+- 支持批量粘贴 Outlook/Hotmail/Live/MSN、iCloud、ChatGPT session Cookie/token 和完整 Codex OAuth JSON
+- 兼容 RT/client_id 正反顺序及多种分隔符
+
+### 邮箱池导入（左侧「邮箱池导入」）
+
+批量导入外部邮箱直接入池，每行一个，支持 Outlook 各地域域名、Hotmail/Live/MSN、iCloud 和自定义邮箱。
+
+---
+
+## 四、常用命令行
+
+除 Web 控制台外，也可用命令行执行：
 
 ```bash
-# Outlook -> Claude / ChatGPT / Grok / Kiro / GitHub
+# Outlook → Claude / ChatGPT / Grok / Kiro / GitHub 端到端
 python run_full_flow.py --platforms claude chatgpt grok kiro github
 
-# 同时处理 3 个邮箱；每个邮箱内的所选平台默认并行
+# 同时处理 3 个邮箱，每个邮箱内所选平台默认并行
 python run_full_flow.py --rounds 12 --concurrency 3 --platforms claude chatgpt kiro
 
 # 使用已有邮箱池并行注册多个平台
@@ -157,27 +180,11 @@ python register_three_platforms.py --from-pool --parallel
 # 常驻注册 Outlook
 python outlook_reg_loop.py
 
-# [重要] Graph RT 提取必须配置可接收验证码的辅助邮箱，否则 proofs/Add 安全信息页无法完成授权
-# 默认使用 YYDS 辅助邮箱并自动接码
-python tools/extract_graph_tokens.py --email user@outlook.com --password 'password'
-# 自定义临时邮箱：.env 设置 OUTLOOK_GRAPH_RECOVERY_PROVIDER=custom，并填好 CUSTOM_MAIL_*
-# 自有 Outlook 辅助邮箱：设置 provider=outlook，并填
-# OUTLOOK_GRAPH_RECOVERY_OUTLOOK_MAILBOX=email@outlook.com----password----refresh_token----client_id
-
 # Claude 使用最新 Outlook refresh token
 python register.py --count 1 --node auto --latest-rt
 
-# Claude 使用 YYDS 临时邮箱
-python register.py --count 1 --node auto --provider yyds
-
-# ChatGPT 使用 iCloud 接码邮箱（先在 .env 配置 ICLOUD_MAIL_API_KEY）
+# ChatGPT 使用 iCloud 接码邮箱
 python register_chatgpt.py --count 1 --email-provider icloud
-
-# 使用普通 iCloud 子邮箱接口（/api/user/email?type=icloud&apikey=...）
-# 先在 .env 设置 ICLOUD_MAIL_TYPE=icloud
-
-# 已开通 Plus 账号：手机号接码验证 -> Codex OAuth -> SUB2API
-python tools/import_plus_codex.py --accounts-file accounts.txt --sms-provider auto --phone-attempts 3
 
 # Grok 浏览器注册并导入 SUB2API
 python register_grok.py --count 1 --sub2api
@@ -185,78 +192,43 @@ python register_grok.py --count 1 --sub2api
 # Kiro Builder ID 注册并导出长期凭据
 python register_kiro.py --count 1
 
-# Codex OAuth -> SUB2API / CPA
-python oauth_codex.py --keep
+# 已开通 Plus 账号：接码验证 → Codex OAuth → SUB2API
+python tools/import_plus_codex.py --accounts-file accounts.txt --sms-provider auto --phone-attempts 3
 ```
 
-完整参数、导出和补传命令见 [CLI 手册](docs/cli.md)。
+---
 
-## 项目结构
+## 五、运行数据
 
-```text
-reg-factory/
-├─ common/                 # 浏览器、邮箱、代理、验证码、上传等共享能力
-├─ tools/                  # 导出、校验、token 补传等维护工具
-├─ runtime/                # 本机日志、状态与临时凭据（内容不提交）
-├─ webui/                  # FastAPI 服务与原生前端
-├─ gmail_android/          # BlueStacks + Appium 的 Gmail 流程
-├─ vision_solver/          # 通用视觉验证码求解库
-├─ xconsole_client/        # XConsole 客户端
-├─ tests/                  # Python 测试
-├─ run_full_flow.py        # 端到端主入口
-├─ register_*.py           # 各平台注册入口
-├─ outlook_reg_loop.py     # Outlook 常驻注册入口
-└─ config.py               # 统一配置读取
-```
-
-根目录只保留用户直接运行的入口和兼容模块；一次性维护命令放 `tools/`，可复用逻辑放 `common/`。完整依赖关系和新增文件约定见 [架构说明](docs/architecture.md)。
-
-## 运行数据
-
-下列内容由程序生成且默认忽略，不属于源码：
+以下文件由程序生成，包含敏感信息，**不要提交到仓库或发给他人**：
 
 | 路径 | 内容 |
 |---|---|
 | `.env` | 本机密钥与服务地址 |
 | `emails.txt` | 邮箱池 |
 | `cookies/` | 平台 Cookie |
-| `tokens/` | 标准 Token 与上传状态 |
+| `tokens/` | Token 与上传状态 |
 | `_outlook_pool/` | Outlook 待用账号 |
 | `outlook_accounts/` | Outlook 账号与 Graph Token |
-| `runtime/logs/`、`tri_register_logs/` | 任务日志 |
-| `runtime/state/` | Clash/住宅代理轮换状态 |
-| `runtime/secrets/` | 本地临时凭据与测试密钥 |
-| `screenshots*/` | 调试截图 |
-| `unlock_results/` | Outlook 解锁结果 |
+| `runtime/logs/` | 任务日志 |
+| `runtime/secrets/` | 本地临时凭据 |
 
-这些路径可能包含敏感信息。排查问题时也不要直接上传完整文件。
+---
 
-## 开发与验证
+## 六、升级与更新
 
-```bash
-python -m unittest discover -s tests
-node --check webui/static/app.js
-```
+- **便携包**：使用顶栏「一键更新」，或从 Releases 下载新版覆盖程序目录
+- **源码**：运行 `update.bat`（Windows）或 `./update.sh`（macOS/Linux）
+- 更新脚本会先检查运行中的任务，再更新依赖、重启并验证版本
+- 数据目录不会随程序目录替换而丢失
 
-更新已安装实例请使用 `update.bat` 或 `./update.sh`。更新脚本会先检查运行中的任务，再更新依赖、重启并验证 WebUI 版本。
+---
 
-## 文档
-
-- [新手教程](docs/getting-started.md)
-- [配置说明](docs/configuration.md)
-- [本地资产 API](docs/api.md)
-- [CLI 手册](docs/cli.md)
-- [架构与目录约定](docs/architecture.md)
-- [维护工具索引](tools/README.md)
-- [Gmail Android 本地环境](docs/gmail-android.md)
-- [常见问题](docs/troubleshooting.md)
-- [版本记录](CHANGELOG.md)
-
-## 支持
+## 七、支持
 
 - QQ 群：`1048143135`
 - Telegram：[@TIANTIANAIPRO](https://t.me/TIANTIANAIPRO)
 
-## 🔗 Friend Links
+---
 
-- 🐧 [**LinuxDO**](https://linux.do) — A community for tech enthusiasts
+> 仅用于学习、开发和经授权的测试。密钥、账号、Cookie、Token 和运行日志均应保留在本机。
