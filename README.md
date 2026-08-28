@@ -226,8 +226,8 @@ python tools/import_plus_codex.py --accounts-file accounts.txt --sms-provider au
 
 ## 七、支持
 
-- QQ 群：`1048143135`
-- Telegram：[@TIANTIANAIPRO](https://t.me/TIANTIANAIPRO)
+- QQ 群：``
+- Telegram：
 
 ---
 
