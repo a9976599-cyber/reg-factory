@@ -1,0 +1,1543 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=">
+<title>auto free · 全能注册工作台</title>
+<link rel="stylesheet" href="/static/style.css?v=20260828-cyber3">
+<style id="aar-skin-inline">
+/* ===== 赛博朋克动态风 v1 ===== */
+:root{
+  --bg:#0a0e1a;
+  --surface:rgba(16,24,48,.55);
+  --surface-raised:rgba(20,30,60,.65);
+  --surface-hover:rgba(28,40,80,.75);
+  --line:rgba(0,229,255,.18);
+  --line-strong:rgba(0,229,255,.40);
+  --text:#d6f7ff;
+  --muted:#7fa8c4;
+  --quiet:#5a7a96;
+  --accent:#00e5ff;
+  --accent-hover:#33ecff;
+  --accent-soft:rgba(0,229,255,.14);
+  --neon-pink:#ff2e88;
+  --neon-purple:#b14cff;
+}
+
+/* ---------- 动态背景层 ---------- */
+html{
+  background:#050810 !important;
+  position:relative !important;
+  min-height:100vh !important;
+}
+html::before{
+  content:'' !important;
+  position:fixed !important; inset:0 !important; z-index:-3 !important;
+  background:
+    radial-gradient(900px 600px at 15% 10%, rgba(177,76,255,.18) 0%, transparent 55%),
+    radial-gradient(800px 700px at 88% 18%, rgba(0,229,255,.15) 0%, transparent 50%),
+    radial-gradient(700px 500px at 50% 95%, rgba(255,46,136,.12) 0%, transparent 55%),
+    linear-gradient(160deg, #080d1c 0%, #0a1024 40%, #060a18 100%) !important;
+  background-attachment:fixed !important;
+}
+/* 动态扫描网格 */
+html::after{
+  content:'' !important;
+  position:fixed !important; inset:0 !important; z-index:-2 !important;
+  background-image:
+    linear-gradient(rgba(0,229,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,.045) 1px, transparent 1px) !important;
+  background-size:46px 46px !important;
+  animation:cyber-grid 18s linear infinite !important;
+  pointer-events:none !important;
+}
+@keyframes cyber-grid{
+  0%{background-position:0 0,0 0}
+  100%{background-position:46px 46px,46px 46px}
+}
+/* 扫描光线 */
+body{position:relative !important}
+body::before{
+  content:'' !important;
+  position:fixed !important; left:0 !important; right:0 !important; top:0 !important; height:140px !important; z-index:-1 !important;
+  background:linear-gradient(180deg, rgba(0,229,255,.10) 0%, transparent 100%) !important;
+  animation:cyber-scan 7s ease-in-out infinite !important;
+  pointer-events:none !important;
+}
+@keyframes cyber-scan{
+  0%,100%{transform:translateY(0);opacity:.5}
+  50%{transform:translateY(80vh);opacity:.9}
+}
+
+body{
+  background:transparent !important;color:#d6f7ff !important;
+  font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif !important;
+}
+a{color:#00e5ff !important}
+.muted,.dash-sub,.panel-note,.src{color:#7fa8c4 !important}
+.mono,kbd{color:#a8d8ff !important}
+
+/* ---------- 顶栏 ---------- */
+.topbar{
+  background:rgba(8,13,28,.72) !important;
+  backdrop-filter:blur(20px) saturate(160%) !important;
+  border-bottom:1px solid rgba(0,229,255,.22) !important;
+  box-shadow:0 4px 28px rgba(0,229,255,.10), inset 0 -1px 0 rgba(255,46,136,.12) !important;
+}
+.brand{color:#d6f7ff !important;font-weight:700 !important;text-shadow:0 0 12px rgba(0,229,255,.5) !important}
+.brand-mark{
+  background:linear-gradient(135deg,#00e5ff,#b14cff) !important;
+  color:#050810 !important;border-radius:11px !important;font-weight:800 !important;
+  box-shadow:0 0 18px rgba(0,229,255,.55), 0 0 6px rgba(177,76,255,.5) !important;
+}
+.top-search{
+  background:rgba(0,229,255,.06) !important;border:1px solid rgba(0,229,255,.22) !important;
+  color:#d6f7ff !important;border-radius:999px !important;padding:6px 14px !important;
+}
+.top-search input{color:#d6f7ff !important;background:transparent !important}
+.top-search::placeholder,.top-search input::placeholder{color:#5a7a96 !important}
+.top-search:focus-within{border-color:#00e5ff !important;box-shadow:0 0 0 3px rgba(0,229,255,.20), 0 0 14px rgba(0,229,255,.25) !important;background:rgba(0,229,255,.10) !important}
+.menu-toggle{background:rgba(0,229,255,.06) !important;color:#a8d8ff !important;border:1px solid rgba(0,229,255,.22) !important;border-radius:10px !important}
+
+/* ---------- 侧栏 ---------- */
+.sidebar{
+  background:rgba(8,13,28,.55) !important;
+  backdrop-filter:blur(16px) !important;
+  border-right:1px solid rgba(0,229,255,.16) !important;
+  width:320px !important;flex:0 0 320px !important;
+}
+.sidebar-title{color:#5a7a96 !important;border-bottom:1px solid rgba(0,229,255,.10) !important;letter-spacing:.12em !important;text-transform:uppercase !important}
+.navbtn{
+  border-radius:12px !important;color:#7fa8c4 !important;font-size:13.5px !important;
+  margin:2px 0 !important;padding:9px 11px !important;
+  transition:all .18s ease !important;
+}
+.navbtn:hover{background:rgba(0,229,255,.08) !important;color:#d6f7ff !important;text-shadow:0 0 8px rgba(0,229,255,.4) !important}
+.navbtn.active{
+  background:linear-gradient(90deg,rgba(0,229,255,.20),rgba(177,76,255,.12)) !important;
+  color:#fff !important;font-weight:650 !important;
+  box-shadow:inset 3px 0 0 #00e5ff, 0 0 0 1px rgba(0,229,255,.35), 0 0 16px rgba(0,229,255,.18) !important;
+  text-shadow:0 0 10px rgba(0,229,255,.5) !important;
+}
+.nav-icon{
+  border-radius:9px !important;background:rgba(0,229,255,.06) !important;
+  border:1px solid rgba(0,229,255,.20) !important;color:#7fa8c4 !important;
+}
+.navbtn.active .nav-icon{background:rgba(0,229,255,.18) !important;border-color:#00e5ff !important;color:#00e5ff !important;box-shadow:0 0 8px rgba(0,229,255,.4) !important}
+.nav-count{background:rgba(255,46,136,.20) !important;color:#ff2e88 !important;border:1px solid rgba(255,46,136,.30) !important}
+.nav-state{color:#5a7a96 !important}
+.scriptbtn{
+  background:rgba(16,24,48,.55) !important;border:1px solid rgba(0,229,255,.16) !important;border-radius:12px !important;
+  transition:all .18s ease !important;
+}
+.scriptbtn:hover{border-color:#00e5ff !important;box-shadow:0 0 18px rgba(0,229,255,.18) !important;transform:translateY(-1px)}
+.scriptbtn.active{border-color:#00e5ff !important;background:rgba(0,229,255,.12) !important;box-shadow:0 0 14px rgba(0,229,255,.20) !important}
+
+/* ---------- 卡片与面板（玻璃态 + 霓虹边） ---------- */
+.panel,.stat-card{
+  border:1px solid rgba(0,229,255,.16) !important;border-radius:18px !important;
+  background:rgba(10,16,36,.60) !important;backdrop-filter:blur(14px) !important;
+  box-shadow:0 6px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(0,229,255,.06) !important;
+  transition:box-shadow .2s ease,transform .16s ease,border-color .2s ease !important;
+}
+.panel:hover{border-color:rgba(0,229,255,.30) !important;box-shadow:0 8px 38px rgba(0,229,255,.12), inset 0 1px 0 rgba(0,229,255,.10) !important}
+.stat-card:hover{transform:translateY(-2px) !important;border-color:rgba(255,46,136,.30) !important;box-shadow:0 10px 40px rgba(255,46,136,.14) !important}
+.pad{padding:22px !important}
+.dash-title{color:#d6f7ff !important;font-weight:750 !important;text-shadow:0 0 14px rgba(0,229,255,.35) !important}
+.stat-label{color:#5a7a96 !important;text-transform:uppercase !important;letter-spacing:.08em !important}
+.stat-value{color:#00e5ff !important;font-weight:750 !important;text-shadow:0 0 12px rgba(0,229,255,.4) !important}
+.stat-foot{color:#5a7a96 !important}
+.h-label{color:#7fa8c4 !important}
+.panel-head h3,.asset-section-head h3{color:#d6f7ff !important;font-weight:700 !important}
+
+/* ---------- 按钮（霓虹） ---------- */
+.btn-run{
+  background:linear-gradient(135deg,#00e5ff,#b14cff) !important;
+  border:1px solid rgba(0,229,255,.6) !important;color:#050810 !important;border-radius:12px !important;font-weight:700 !important;
+  box-shadow:0 0 18px rgba(0,229,255,.45), 0 0 6px rgba(177,76,255,.4) !important;
+  transition:all .18s ease !important;
+}
+.btn-run:hover{filter:brightness(1.12) !important;box-shadow:0 0 28px rgba(0,229,255,.6), 0 0 10px rgba(255,46,136,.4) !important}
+.btn-run:active{transform:translateY(1px) !important}
+.btn-run:disabled{filter:grayscale(.5) brightness(.85) !important;box-shadow:none !important}
+.btn-secondary{
+  border:1px solid rgba(0,229,255,.28) !important;color:#7fa8c4 !important;
+  background:rgba(0,229,255,.05) !important;border-radius:12px !important;
+  transition:all .18s ease !important;
+}
+.btn-secondary:hover{border-color:#00e5ff !important;color:#00e5ff !important;background:rgba(0,229,255,.12) !important;box-shadow:0 0 14px rgba(0,229,255,.22) !important}
+.ghost,.icon-button{
+  border:1px solid rgba(0,229,255,.22) !important;color:#7fa8c4 !important;border-radius:11px !important;background:rgba(0,229,255,.05) !important;
+  transition:all .18s ease !important;
+}
+.ghost:hover,.icon-button:hover{background:rgba(0,229,255,.12) !important;color:#00e5ff !important;border-color:#00e5ff !important;box-shadow:0 0 12px rgba(0,229,255,.2) !important}
+.mode-switch button{
+  background:rgba(0,229,255,.05) !important;border:1px solid rgba(0,229,255,.22) !important;color:#7fa8c4 !important;
+}
+.mode-switch button.active{
+  background:linear-gradient(135deg,#00e5ff,#b14cff) !important;color:#050810 !important;border-color:#00e5ff !important;
+  box-shadow:0 0 16px rgba(0,229,255,.4) !important;
+}
+
+/* ---------- 表单 ---------- */
+input,select,textarea{
+  background:rgba(0,229,255,.06) !important;border:1px solid rgba(0,229,255,.24) !important;
+  border-radius:11px !important;color:#d6f7ff !important;
+  transition:all .18s ease !important;
+}
+input::placeholder,textarea::placeholder{color:#5a7a96 !important}
+input:focus,select:focus,textarea:focus{
+  background:rgba(0,229,255,.12) !important;border-color:#00e5ff !important;
+  box-shadow:0 0 0 3px rgba(0,229,255,.18), 0 0 14px rgba(0,229,255,.20) !important;outline:none !important;
+}
+select option{background:#0a1024 !important;color:#d6f7ff !important}
+label{color:#7fa8c4 !important}
+.network-field>span{color:#7fa8c4 !important}
+.network-section-title{color:#d6f7ff !important;text-shadow:0 0 10px rgba(0,229,255,.3) !important}
+.check{border-color:rgba(0,229,255,.24) !important;accent-color:#00e5ff !important}
+
+/* ---------- 表格 ---------- */
+table,thead,tbody,tr,th,td{border-color:rgba(0,229,255,.10) !important;color:#d6f7ff !important}
+thead th{background:rgba(0,229,255,.10) !important;color:#00e5ff !important;font-weight:650 !important;text-transform:uppercase !important;letter-spacing:.05em !important}
+tbody tr{background:transparent !important;transition:background .14s ease !important}
+tbody tr:hover{background:rgba(0,229,255,.08) !important;box-shadow:inset 0 0 12px rgba(0,229,255,.08) !important}
+.asset-scan-table td,.asset-scan-table th{border-color:rgba(0,229,255,.08) !important}
+
+/* ---------- 标签与徽章（霓虹） ---------- */
+.tag{
+  background:rgba(0,229,255,.12) !important;color:#00e5ff !important;
+  border:1px solid rgba(0,229,255,.32) !important;border-radius:8px !important;font-weight:560 !important;
+  box-shadow:0 0 8px rgba(0,229,255,.12) !important;
+}
+.badge{background:rgba(0,229,255,.10) !important;color:#7fa8c4 !important;border-radius:999px !important;border:1px solid rgba(0,229,255,.18) !important}
+.badge.ok,.badge.good{background:rgba(15,200,120,.14) !important;color:#4ade80 !important;border-color:rgba(15,200,120,.32) !important}
+.badge.bad,.badge.err{background:rgba(255,46,136,.14) !important;color:#ff2e88 !important;border-color:rgba(255,46,136,.32) !important}
+.badge.pending{background:rgba(0,229,255,.10) !important;color:#5a7a96 !important}
+.dot.ok{background:#4ade80 !important;box-shadow:0 0 8px #4ade80 !important}
+.dot.bad{background:#ff2e88 !important;box-shadow:0 0 8px #ff2e88 !important}
+.dot.pending{background:#5a7a96 !important}
+.skin-badge{
+  margin-left:8px;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;
+  background:linear-gradient(135deg,#00e5ff,#ff2e88) !important;color:#050810 !important;
+  box-shadow:0 0 10px rgba(0,229,255,.5) !important;
+}
+
+/* ---------- 日志 / 控制台（终端风） ---------- */
+.log,#oar-console,.console{
+  background:rgba(5,8,16,.78) !important;color:#4ad8ff !important;border:1px solid rgba(0,229,255,.18) !important;border-radius:14px !important;
+  font-family:"Consolas","SF Mono",monospace !important;
+  box-shadow:inset 0 0 24px rgba(0,229,255,.06) !important;
+}
+.log:empty{color:#5a7a96 !important}
+.log-panel{background:rgba(10,16,36,.55) !important;border:1px solid rgba(0,229,255,.16) !important;border-radius:16px !important}
+.log-heading{color:#00e5ff !important;text-shadow:0 0 8px rgba(0,229,255,.4) !important}
+
+/* ---------- 弹窗 ---------- */
+.oar-modal-bg{background:rgba(5,8,16,.72) !important;backdrop-filter:blur(8px) !important}
+.oar-modal{
+  background:linear-gradient(155deg,rgba(12,20,44,.96),rgba(8,14,32,.96)) !important;color:#d6f7ff !important;
+  border:1px solid rgba(0,229,255,.30) !important;border-radius:20px !important;
+  box-shadow:0 0 50px rgba(0,229,255,.18), 0 28px 72px rgba(0,0,0,.5) !important;
+}
+.oar-modal h3{color:#00e5ff !important;text-shadow:0 0 12px rgba(0,229,255,.4) !important}
+dialog,.contact-dialog,.plus-payment-dialog{
+  background:linear-gradient(155deg,rgba(12,20,44,.96),rgba(8,14,32,.96)) !important;color:#d6f7ff !important;border-radius:20px !important;
+  border:1px solid rgba(0,229,255,.30) !important;box-shadow:0 0 50px rgba(0,229,255,.18), 0 28px 72px rgba(0,0,0,.5) !important;
+}
+.plus-payment-dialog::backdrop,.contact-dialog::backdrop{background:rgba(5,8,16,.72) !important}
+.tour-popover{background:linear-gradient(155deg,rgba(12,20,44,.96),rgba(8,14,32,.96)) !important;color:#d6f7ff !important;border:1px solid rgba(0,229,255,.28) !important;border-radius:16px !important;box-shadow:0 0 40px rgba(0,229,255,.14) !important}
+
+/* ---------- 网络出口页 ---------- */
+.network-current{background:rgba(0,229,255,.08) !important;border:1px solid rgba(0,229,255,.20) !important;border-radius:999px !important}
+.network-message{color:#7fa8c4 !important}
+
+/* ---------- 补充覆盖 ---------- */
+.stat-card::before{background:linear-gradient(90deg,#00e5ff,#ff2e88) !important}
+.health-row{background:rgba(0,229,255,.05) !important;border-color:rgba(0,229,255,.14) !important;color:#d6f7ff !important}
+.password-toggle{background:rgba(0,229,255,.05) !important;border-color:rgba(0,229,255,.22) !important;color:#7fa8c4 !important}
+.password-toggle:hover{background:rgba(0,229,255,.12) !important;color:#00e5ff !important;border-color:#00e5ff !important}
+.mailbox-password-cell{color:#d6f7ff !important}
+.oar-proxy-hint{background:rgba(0,229,255,.06) !important;border:1px dashed rgba(0,229,255,.32) !important;color:#7fa8c4 !important}
+.oar-proxy-hint::before{color:#00e5ff !important;text-shadow:0 0 8px rgba(0,229,255,.4) !important}
+.oar-field select,.oar-field input{background:rgba(0,229,255,.06) !important;border-color:rgba(0,229,255,.24) !important;color:#d6f7ff !important}
+.oar-field select:focus,.oar-field input:focus{background:rgba(0,229,255,.12) !important;border-color:#00e5ff !important}
+.asset-scan-table-wrap{background:transparent !important;border-color:rgba(0,229,255,.14) !important}
+.asset-scan-table th,.table th{background:rgba(0,229,255,.10) !important;color:#00e5ff !important;border-bottom-color:rgba(0,229,255,.12) !important}
+.asset-scan-table td,.table td{color:#d6f7ff !important;border-bottom-color:rgba(0,229,255,.08) !important}
+.asset-scan-table tbody tr:hover td,.table tr:hover td{background:rgba(0,229,255,.08) !important}
+.plus-log-surface{background:rgba(10,16,36,.55) !important;border:1px solid rgba(0,229,255,.16) !important;border-radius:16px !important}
+.plus-stage-row{background:rgba(0,229,255,.05) !important;border-bottom-color:rgba(0,229,255,.10) !important;color:#d6f7ff !important}
+#plus-run-log{background:rgba(5,8,16,.78) !important;border-color:rgba(0,229,255,.18) !important;color:#4ad8ff !important}
+#as-dialog{background:linear-gradient(155deg,rgba(12,20,44,.96),rgba(8,14,32,.96)) !important;border-color:rgba(0,229,255,.30) !important;color:#d6f7ff !important}
+#as-dialog input,#as-dialog select,#as-dialog textarea{background:rgba(0,229,255,.06) !important;border-color:rgba(0,229,255,.24) !important;color:#d6f7ff !important}
+[style*="background:#0b0c0e"],[style*="background:#0f1117"],[style*="background:#14171f"],[style*="background:#1b1f2a"],[style*="background:#151c2a"],[style*="background:#0f1520"],[style*="background:#111318"]{background:rgba(5,8,16,.78) !important;color:#4ad8ff !important}
+[style*="background:rgba(17,17,19"],[style*="background:rgba(17,18,20"]{background:rgba(5,8,16,.78) !important;color:#4ad8ff !important}
+[style*="color:#cbd0d7"],[style*="color:#9aa6bd"],[style*="color:#9aa3b2"],[style*="color:#9eacc4"],[style*="color:#a9b9ff"]{color:#a8d8ff !important}
+.tour-note{background:rgba(0,229,255,.08) !important;color:#a8d8ff !important;border-left-color:#00e5ff !important}
+.asset-status-badge.unlock{color:#fbbf24 !important;background:rgba(229,168,75,.14) !important}
+.asset-status-badge.banned,.asset-status-badge.invalid{color:#ff2e88 !important;background:rgba(255,46,136,.12) !important}
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:rgba(0,229,255,.04)}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#00e5ff,#b14cff);border-radius:999px;border:2px solid transparent}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#33ecff,#c45cff)}
+
+/* ---------- 动画工具类 ---------- */
+.navbtn,.btn-run,.btn-secondary,.ghost,.scriptbtn,.stat-card,.panel{animation:cyber-fade .4s ease !important}
+@keyframes cyber-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand-row">
+    <button id="btn-nav" class="menu-toggle" type="button" aria-label="打开任务菜单" aria-expanded="false"><span aria-hidden="true">☰</span></button>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">AF</span><span>auto free</span></div>
+  </div>
+  <div class="top-actions">
+    <div class="top-search">
+      <span class="top-search-icon" aria-hidden="true">⌕</span>
+      <input id="global-search" type="text" placeholder="搜索任务 / 功能…" autocomplete="off" spellcheck="false">
+    </div>
+    <button id="btn-update" class="update-button" type="button" title="检查并安装最新版本" disabled>
+      <span aria-hidden="true">↻</span><span id="update-label">更新</span>
+    </button>
+    <span id="update-message" class="update-message" role="status" aria-live="polite"></span>
+    <div class="health-summary" id="status" title="浏览器、网络出口与 Plus 工作台状态">
+      <span class="dot pending" id="health-dot"></span>
+      <span id="health-label">服务检测中</span>
+    </div>
+    <span class="running" id="running"></span>
+  </div>
+</header>
+
+<div class="layout">
+  <button id="nav-backdrop" class="nav-backdrop" type="button" aria-label="关闭任务菜单"></button>
+  <nav class="sidebar" data-guide="task-library">
+    <div class="sidebar-tools">
+      <div class="sidebar-label">工具</div>
+
+      <button class="navbtn active" data-view="dashboard"><span class="nav-icon" aria-hidden="true">▦</span><span>总览</span></button>
+      <button class="navbtn" data-view="scripts"><span class="nav-icon" aria-hidden="true">▶</span><span>任务库</span><span id="task-count" class="nav-count">--</span></button>
+      <button class="navbtn" data-view="accounts"><span class="nav-icon" aria-hidden="true">@</span><span>账号资产</span></button>
+      <button class="navbtn" data-view="tasks"><span class="nav-icon" aria-hidden="true">◷</span><span>任务</span></button>
+      <button class="navbtn" data-view="aarregister"><span class="nav-icon" aria-hidden="true">◈</span><span>A 自动注册</span></button>
+      <button class="navbtn" data-view="aarproxies"><span class="nav-icon" aria-hidden="true">⇄</span><span>A 代理池</span></button>
+      <button class="navbtn" data-view="aarsettings"><span class="nav-icon" aria-hidden="true">⚙</span><span>A 服务配置</span></button>
+      <button class="navbtn" data-view="oar"><span class="nav-icon" aria-hidden="true">O</span><span>O 邮箱注册台</span></button>
+      <button class="navbtn" data-view="mailpool"><span class="nav-icon" aria-hidden="true">⤓</span><span>邮箱池导入</span></button>
+      <button class="navbtn" data-view="assets"><span class="nav-icon" aria-hidden="true">API</span><span>资产 API</span></button>
+      <button class="navbtn" data-view="plus"><span class="nav-icon" aria-hidden="true">P</span><span>Plus 导入</span><span id="plus-nav-state" class="nav-state">检测中</span></button>
+      <button class="navbtn" data-view="network" data-guide="network-entry"><span class="nav-icon" aria-hidden="true">IP</span><span>网络出口</span></button>
+      <button class="navbtn" data-view="env" data-guide="env-entry"><span class="nav-icon" aria-hidden="true">CFG</span><span>环境配置</span></button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="service-list" aria-label="服务状态">
+        <span class="status-item"><span class="dot" id="dot-bb"></span><span id="browser-label">BitBrowser</span></span>
+        <span class="status-item"><span class="dot" id="dot-clash"></span><span id="network-label">网络出口</span></span>
+        <span class="status-item"><span class="dot pending" id="dot-plus"></span>Plus Codex</span>
+      </div>
+      <div class="instance-meta">
+        <span class="version" id="version" title="当前 WebUI 提交版本">v--</span>
+        <span class="node" id="node">出口 --</span>
+      </div>
+      <button id="btn-telegram" class="contact-button" type="button" style="display:none">联系支持 <span aria-hidden="true">↗</span></button>
+    </div>
+  </nav>
+
+  <main class="content">
+    <!-- 运行视图 -->
+    <!-- 总览 Dashboard（仿 any-auto-register 概览页：卡片网格 + 服务状态） -->
+    <section id="view-dashboard">
+      <div class="dash-head">
+        <div>
+          <h1 class="dash-title">总览</h1>
+          <p class="dash-sub">账号资产与本地服务运行状态</p>
+        </div>
+        <button id="btn-dash-refresh" class="ghost">↻ 刷新</button>
+      </div>
+
+      <div class="stat-grid" id="dash-stats">
+        <div class="stat-card">
+          <div class="stat-label">邮箱总数</div>
+          <div class="stat-value" id="stat-emails">--</div>
+          <div class="stat-foot" id="stat-emails-foot">加载中…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">平台凭据</div>
+          <div class="stat-value" id="stat-cookies">--</div>
+          <div class="stat-foot" id="stat-cookies-foot">Claude / ChatGPT / Grok / Kiro</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">已导出账号</div>
+          <div class="stat-value" id="stat-exported">--</div>
+          <div class="stat-foot" id="stat-exported-foot">lifecycle 统计</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">注册台账号</div>
+          <div class="stat-value" id="stat-aar-total">--</div>
+          <div class="stat-foot" id="stat-aar-foot">试用 -- · 订阅 --</div>
+        </div>
+      </div>
+
+      <!-- A 总览并入：左列聚合平台分布与服务健康，右列聚合状态与邮箱资产 -->
+      <div class="dash-workspace">
+        <div class="dash-stack dash-stack-left">
+          <div class="panel">
+            <div class="panel-head"><h3>注册台·平台分布</h3></div>
+            <div id="ah-platforms"></div>
+          </div>
+          <div class="panel dash-health">
+            <div class="panel-head"><h3>服务健康</h3><span class="panel-note">本地依赖与网络出口</span></div>
+            <div class="health-grid" id="dash-health">
+              <div class="health-row"><span class="h-label">浏览器</span><span class="badge" id="h-browser">--</span></div>
+              <div class="health-row"><span class="h-label">网络出口</span><span class="badge" id="h-network">--</span></div>
+              <div class="health-row"><span class="h-label">Plus Codex</span><span class="badge" id="h-plus">--</span></div>
+              <div class="health-row"><span class="h-label">版本</span><span class="badge" id="h-version">--</span></div>
+              <div class="health-row"><span class="h-label">节点</span><span class="badge" id="h-node">--</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="dash-stack dash-stack-right">
+          <div class="panel">
+            <div class="panel-head"><h3>注册台·状态分布</h3></div>
+            <div id="ah-status-groups"></div>
+          </div>
+          <div class="panel dash-mailbox">
+            <div class="panel-head"><h3>邮箱资产</h3><span class="src" id="dash-mailbox-count">--</span></div>
+            <div class="dash-mailbox-tools">
+              <input id="dash-mailbox-search" type="text" placeholder="搜索邮箱…" style="max-width:200px">
+              <button id="btn-dash-mailbox-export" class="btn-run" style="padding:5px 12px;font-size:12px">导出全部</button>
+            </div>
+            <div class="dash-mailbox-table-wrap">
+              <table class="asset-scan-table">
+                <thead><tr><th>邮箱</th><th>密码</th><th>类型</th><th>状态</th></tr></thead>
+                <tbody id="dash-mailbox-rows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 任务页（仿 AAR /history） -->
+    <section id="view-tasks" style="display:none">
+      <div class="panel">
+        <div class="dash-head">
+          <div><h1 class="dash-title">任务</h1><p class="dash-sub">注册与协议任务的运行记录</p></div>
+          <button id="btn-tasks-refresh" class="ghost">↻ 刷新</button>
+        </div>
+        <div class="stat-grid" id="tasks-metrics">
+          <div class="stat-card"><div class="stat-label">运行任务</div><div class="stat-value" id="task-m-running">--</div></div>
+          <div class="stat-card"><div class="stat-label">最近运行</div><div class="stat-value" id="task-m-last">--</div></div>
+          <div class="stat-card"><div class="stat-label">当前脚本</div><div class="stat-value" id="task-m-script">--</div></div>
+          <div class="stat-card"><div class="stat-label">服务 PID</div><div class="stat-value" id="task-m-pid">--</div></div>
+        </div>
+        <div class="asset-scan-toolbar">
+          <input id="tasks-search" type="text" placeholder="搜索脚本 / 任务…" style="max-width:240px">
+          <span id="tasks-msg" class="asset-message"></span>
+        </div>
+        <div class="asset-scan-table-wrap">
+          <table class="asset-scan-table">
+            <thead><tr><th>时间</th><th>脚本</th><th>状态</th><th>PID</th><th>操作</th></tr></thead>
+            <tbody id="tasks-rows"></tbody>
+          </table>
+          <div id="tasks-empty" class="asset-scan-empty">暂无运行记录</div>
+        </div>
+      </div>
+
+      <!-- A 任务记录并入 -->
+      <div class="panel" style="margin-top:18px">
+        <div class="dash-head">
+          <div><h2 style="margin:0;font-size:17px;font-weight:700">A · 任务记录</h2><p class="dash-sub">注册台（A）产生的注册任务历史</p></div>
+          <button id="btn-at-refresh" class="ghost">↻ 刷新</button>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">任务数</div><div class="stat-value" id="at-total">0</div></div>
+          <div class="stat-card"><div class="stat-label">成功</div><div class="stat-value" id="at-ok">0</div></div>
+          <div class="stat-card"><div class="stat-label">失败</div><div class="stat-value" id="at-fail">0</div></div>
+          <div class="stat-card"><div class="stat-label">进行中</div><div class="stat-value" id="at-running">0</div></div>
+        </div>
+        <div class="asset-scan-toolbar">
+          <label><span>平台</span><select id="at-platform"><option value="">全部平台</option></select></label>
+          <label><span>状态</span><select id="at-status">
+            <option value="">全部状态</option><option value="running">运行中</option><option value="success">成功</option><option value="failed">失败</option><option value="cancelled">已取消</option>
+          </select></label>
+          <button id="btn-at-clear" class="btn-inline">清除</button>
+        </div>
+        <div class="asset-scan-table-wrap">
+          <table class="asset-scan-table">
+            <thead><tr><th>时间</th><th>任务 ID</th><th>平台</th><th>状态</th><th>进度</th><th>成功/失败</th><th>错误</th></tr></thead>
+            <tbody id="at-rows"></tbody>
+          </table>
+          <div id="at-empty" class="asset-scan-empty">注册台暂无任务记录</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 账号资产页（仿 AAR /accounts） -->
+    <section id="view-accounts" style="display:none">
+      <div class="panel">
+        <div class="dash-head">
+          <div><h1 class="dash-title">账号资产</h1><p class="dash-sub">本机全部账号凭据（含密码，无视领取状态）</p></div>
+          <div class="asset-scan-actions">
+            <input id="accounts-search" type="text" placeholder="搜索邮箱…" style="max-width:200px">
+            <button id="btn-accounts-refresh" class="ghost">↻ 刷新</button>
+            <button id="btn-accounts-export" class="btn-run" style="padding:5px 12px;font-size:12px">导出全部</button>
+          </div>
+        </div>
+        <div class="stat-grid" id="accounts-stats">
+          <div class="stat-card"><div class="stat-label">总账号</div><div class="stat-value" id="acc-total">--</div></div>
+          <div class="stat-card"><div class="stat-label">Outlook</div><div class="stat-value" id="acc-outlook">--</div></div>
+          <div class="stat-card"><div class="stat-label">iCloud</div><div class="stat-value" id="acc-icloud">--</div></div>
+          <div class="stat-card"><div class="stat-label">其他</div><div class="stat-value" id="acc-other">--</div></div>
+        </div>
+        <div class="asset-scan-table-wrap">
+          <table class="asset-scan-table">
+            <thead><tr><th style="width:30px"><input type="checkbox" id="acc-selall"></th><th>邮箱</th><th>密码</th><th></th><th>refresh_token</th><th>client_id</th><th>类型</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="accounts-rows"></tbody>
+          </table>
+          <div id="accounts-empty" class="asset-scan-empty">暂无账号资产</div>
+        </div>
+      </div>
+
+      <!-- A 账号管理并入（注册台账号表：平台维度 CRUD） -->
+      <div class="panel" style="margin-top:18px">
+        <div class="dash-head">
+          <div><h2 style="margin:0;font-size:17px;font-weight:700">A · 注册台账号管理</h2><p class="dash-sub" id="aa-sub">按平台管理的注册台账号（可增删改、导入导出）</p></div>
+          <div class="asset-scan-actions">
+            <select id="aa-platform" style="max-width:150px"><option value="">加载平台…</option></select>
+            <button id="btn-aa-add" class="ghost">＋ 手动新增</button>
+            <button id="btn-aa-import" class="ghost">⤒ 批量导入</button>
+            <button id="btn-aa-export" class="ghost">⤓ 导出 CSV</button>
+            <button id="btn-aa-refresh" class="ghost">↻ 刷新</button>
+          </div>
+        </div>
+        <div class="asset-scan-toolbar">
+          <input id="aa-search" type="text" placeholder="搜索账号邮箱..." style="max-width:220px">
+          <label><span>状态</span><select id="aa-status">
+            <option value="">全部状态</option>
+            <option value="registered">已注册</option>
+            <option value="trial">试用中</option>
+            <option value="subscribed">已订阅</option>
+            <option value="free">免费</option>
+            <option value="trial_eligible">可试用</option>
+            <option value="expired">已过期</option>
+            <option value="invalid">已失效</option>
+          </select></label>
+          <span id="aa-count" class="asset-scan-result-count">0 个</span>
+          <span id="aa-page" class="asset-scan-result-count">1 / 1</span>
+          <button id="btn-aa-prev" class="icon-button" type="button">‹</button>
+          <button id="btn-aa-next" class="icon-button" type="button">›</button>
+          <button id="btn-aa-delete" class="btn-inline" style="display:none;color:#f87171">🗑 删除选中</button>
+        </div>
+        <div class="asset-scan-table-wrap">
+          <table class="asset-scan-table">
+            <thead><tr>
+              <th style="width:30px"><input type="checkbox" id="aa-selall"></th>
+              <th>邮箱 (Email)</th><th>密码 (Pwd)</th><th>状态 (Status)</th><th>注册时间 (Date)</th><th>操作</th>
+            </tr></thead>
+            <tbody id="aa-rows"></tbody>
+          </table>
+          <div id="aa-empty" class="asset-scan-empty">暂无注册台账号，点「手动新增」或「批量导入」开始</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 设置中心（仿 AAR /settings 九宫格） -->
+    <section id="view-settings" style="display:none">
+      <div class="panel">
+        <div class="dash-head">
+          <div><h1 class="dash-title">设置中心</h1><p class="dash-sub">环境与网络配置（任务与环境两个分组）</p></div>
+        </div>
+        <div class="settings-grid">
+          <button class="settings-tile" data-goto="env"><span class="settings-tile-icon">CFG</span><span class="settings-tile-label">环境配置</span><span class="settings-tile-desc">密钥、API 地址、各平台参数</span></button>
+          <button class="settings-tile" data-goto="network"><span class="settings-tile-icon">IP</span><span class="settings-tile-label">网络出口</span><span class="settings-tile-desc">Clash / 住宅代理 / 平台覆盖</span></button>
+          <button class="settings-tile" data-goto="mailpool"><span class="settings-tile-icon">⤓</span><span class="settings-tile-label">邮箱池</span><span class="settings-tile-desc">批量导入外部邮箱</span></button>
+          <button class="settings-tile" data-goto="assets"><span class="settings-tile-icon">API</span><span class="settings-tile-label">资产 API</span><span class="settings-tile-desc">领取 / 导出本地账号</span></button>
+          <button class="settings-tile" data-goto="plus"><span class="settings-tile-icon">P</span><span class="settings-tile-label">Plus 导入</span><span class="settings-tile-desc">Plus → SUB2API 协议</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 任务库页：分类选项卡分页 + 脚本卡片网格 -->
+    <section id="view-scripts" style="display:none">
+      <div class="dash-head">
+        <div><h1 class="dash-title">任务库</h1><p class="dash-sub">选择分类，点卡片直接进入运行页</p></div>
+        <input id="scripts-search" type="text" placeholder="搜索任务…" style="max-width:240px">
+      </div>
+      <div class="aar-tabs" id="scripts-tabs"></div>
+      <div class="scripts-grid" id="scripts-grid"></div>
+      <div id="scripts-empty" class="asset-scan-empty">没有匹配的任务</div>
+    </section>
+
+    <!-- O 邮箱注册台（outlook-auto-register 全功能原生移植） -->
+    <section id="view-oar" style="display:none">
+      <div class="oar-tabs" id="oar-tabs">
+        <button class="active" data-tab="overview">概览</button>
+        <button data-tab="register">批次注册</button>
+        <button data-tab="pool">账号池<span id="oar-acc-count" class="nav-count">0</span></button>
+        <button data-tab="proxies">代理池<span id="oar-px-count" class="nav-count">0</span></button>
+        <button data-tab="proxy-stats">代理统计</button>
+        <button data-tab="verify">测活</button>
+        <button data-tab="ops">IMAP / 保活</button>
+      </div>
+
+      <!-- 概览 -->
+      <div id="oar-pane-overview" class="oar-pane">
+        <div class="oar-statcards" id="oar-statCards"></div>
+        <div class="panel pad" style="margin-top:16px">
+          <h3 style="margin:0 0 12px">注册批次</h3>
+          <table class="table">
+            <thead><tr><th>批次</th><th>时间</th><th>数量</th><th>并发</th><th>模式</th><th>状态</th><th>成功/失败</th></tr></thead>
+            <tbody id="oar-jobsBody"><tr><td colspan="7" class="muted">暂无批次</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 批次注册 -->
+      <div id="oar-pane-register" class="oar-pane" style="display:none">
+        <div class="oar-reg-layout">
+          <!-- 左：配置 -->
+          <div class="panel pad oar-reg-left">
+            <div class="oar-block">
+              <div class="oar-block-head"><h4>注册资源</h4><span class="muted" style="font-size:11.5px">代理与打码，保存在本机</span></div>
+              <div class="oar-grid">
+                <label class="oar-field"><span>代理来源</span>
+                  <select id="oar-proxySource">
+                    <option value="network">跟随网络出口（推荐）</option>
+                    <option value="pool">使用 O 代理池</option>
+                    <option value="manual">手动备用代理</option>
+                    <option value="direct">直连（不使用代理）</option>
+                  </select>
+                </label>
+                <label class="oar-field" id="oar-proxyManualWrap" style="display:none"><span>备用代理 <em>（仅手动模式）</em></span>
+                  <input type="text" id="oar-proxy" placeholder="http://user:pass@host:port" autocomplete="off" />
+                </label>
+                <div class="oar-proxy-hint oar-span2" id="oar-proxyHint">将使用「网络出口」页配置的出口策略。</div>
+                <label class="oar-field oar-span2"><span>打码方式</span>
+                  <select id="oar-pxSolver">
+                    <option value="auto">自动（按可用 Key 选择）</option>
+                    <option value="local">本地打码（SwiftShader，免 Key）</option>
+                    <option value="captcha_run">captcha.run</option>
+                    <option value="ezcaptcha">EzCaptcha</option>
+                    <option value="capsolver">CapSolver</option>
+                  </select>
+                </label>
+                <label class="oar-field oar-span2"><span>captcha.run Key <em class="muted" style="font-size:11px">（选本地打码可留空）</em></span><input type="password" id="oar-captchaKey" placeholder="captcha.run Bearer key（本地打码免填）" autocomplete="off" spellcheck="false" /></label>
+              </div>
+            </div>
+            <div class="oar-block">
+              <div class="oar-block-head"><h4>运行参数</h4><span class="muted" style="font-size:11.5px">数量、并发、产出格式</span></div>
+              <div class="oar-grid">
+                <label class="oar-field"><span>注册数量</span><input type="number" id="oar-count" value="1" min="1" max="20" /></label>
+                <label class="oar-field"><span>并发度</span><input type="number" id="oar-concurrency" value="1" min="1" max="20" /></label>
+                <label class="oar-field"><span>PX 模式</span><select id="oar-pxMode"></select></label>
+                <label class="oar-field"><span>邮箱后缀</span><select id="oar-domain"></select></label>
+                <label class="oar-field"><span>国家代码</span><input type="text" id="oar-country" value="US" /></label>
+                <label class="oar-field"><span>邮箱前缀（留空随机）</span><input type="text" id="oar-prefix" placeholder="随机" /></label>
+                <label class="oar-field oar-span2"><span>产出格式</span><select id="oar-tokenMode"></select></label>
+                <label class="oar-field oar-span2"><span>批次名称（可选）</span><input type="text" id="oar-batchLabel" placeholder="留空自动生成，如 0815-US-outlook-10x-G6" autocomplete="off" /></label>
+                <label class="oar-field"><span>错峰最小(秒)</span><input type="number" step="0.5" id="oar-jitterMin" placeholder="默认 3" /></label>
+                <label class="oar-field"><span>错峰最大(秒)</span><input type="number" step="0.5" id="oar-jitterMax" placeholder="默认 8" /></label>
+              </div>
+              <label class="oar-switch" style="margin-top:10px"><input type="checkbox" id="oar-skipLogin" /> 仅注册不登录</label>
+              <label class="oar-switch" style="margin-top:6px"><input type="checkbox" id="oar-dryRun" /> 试运行（不真实注册，校验配置）</label>
+              <p class="muted" style="font-size:11.5px;margin:10px 0 0">单次真实注册上限 20；产出写入 accounts/。</p>
+            </div>
+            <div class="oar-reg-foot">
+              <button class="btn-run" id="btn-oar-start" type="button">开始批次注册</button>
+              <button class="btn-secondary" id="btn-oar-stop" type="button" style="display:none">停止</button>
+              <span class="muted" id="oar-cfgHint" style="font-size:12px"></span>
+            </div>
+          </div>
+
+          <!-- 右：日志 + 进度 -->
+          <div class="panel pad oar-reg-right">
+            <div class="oar-log-head">
+              <strong>注册日志</strong>
+              <span id="oar-jobBadge"></span>
+              <span style="flex:1"></span>
+              <button type="button" class="btn-inline" id="oar-logCopyBtn" style="display:none">复制</button>
+              <span class="tag" id="oar-logLive" style="display:none">实时更新中…</span>
+            </div>
+            <div id="oar-console" class="oar-console mono"><p class="muted" id="oar-logEmpty" style="padding:8px">配置完成后点击「开始批次注册」，代理预检、PX、注册各阶段会实时显示在这里</p></div>
+            <div class="oar-progress-head">
+              <strong>账号进度</strong>
+              <span style="margin-left:auto;font-size:12px;color:#c8d2e8">总 <b id="oar-nTotal">0</b></span>
+              <span style="font-size:12px;color:#7ee787">成功 <b id="oar-nOk">0</b></span>
+              <span style="font-size:12px;color:#ff7b72">失败 <b id="oar-nErr">0</b></span>
+              <span style="font-size:12px;color:#9ec1ff">进行中 <b id="oar-nRun">0</b></span>
+            </div>
+            <table class="table">
+              <thead><tr><th style="width:40px">#</th><th>状态</th><th>邮箱</th><th>密码</th><th>refresh_token</th><th>失败原因</th></tr></thead>
+              <tbody id="oar-progressBody"><tr><td colspan="6" class="muted">开始注册后，各账号状态会显示在这里</td></tr></tbody>
+            </table>
+            <div id="oar-batchSummary" class="oar-msgbox"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 账号池 -->
+      <div id="oar-pane-pool" class="oar-pane" style="display:none">
+        <div class="oar-statcards" id="oar-statcards-pool"></div>
+        <div class="panel pad" style="margin-top:14px">
+          <div class="oar-toolbar">
+            <input type="text" id="oar-poolSearch" class="top-search" placeholder="搜索邮箱 / 备注 / 批次…" style="width:220px;padding:6px 14px">
+            <select id="oar-filterView" class="ghost" style="padding:6px 10px;border-radius:9px;background:#1b1f2a;color:#9aa6bd">
+              <option value="all">全部状态</option>
+              <option value="usable">Graph 可用</option>
+              <option value="dead">令牌失效</option>
+              <option value="untested">未测活</option>
+              <option value="without">无 Token</option>
+              <option value="dual">双令牌</option>
+            </select>
+            <select id="oar-filterBatch" class="ghost" style="padding:6px 10px;border-radius:9px;background:#1b1f2a;color:#9aa6bd">
+              <option value="all">全部批次</option>
+            </select>
+            <span class="muted" style="font-size:12px">已选 <b id="oar-selCount">0</b></span>
+            <span style="flex:1"></span>
+            <button id="btn-oar-import" class="btn-secondary" type="button">导入</button>
+            <select id="oar-exportFmt" class="ghost" style="padding:6px 8px;border-radius:9px;background:#1b1f2a;color:#9aa6bd"></select>
+            <button id="btn-oar-export" class="btn-secondary" type="button">导出</button>
+            <button id="btn-oar-copySel" class="btn-secondary" type="button">复制</button>
+            <button id="btn-oar-verifySel" class="btn-secondary" type="button" title="重测选中或全部有 Token 的号">测活</button>
+            <button id="btn-oar-rescueSel" class="btn-secondary" type="button" title="rescue_login：用账密重新 OAuth">重登</button>
+            <button id="btn-oar-delSel" class="btn-secondary" type="button" style="color:#ff7b72">删除</button>
+          </div>
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="oar-ckAll" style="accent-color:#4f8cff" /></th>
+              <th>邮箱</th><th style="width:72px">密码</th><th style="width:130px">恢复邮箱</th><th style="width:110px">读信状态</th>
+              <th style="width:56px">批次</th><th style="width:96px">注册时间</th><th style="width:64px">存活</th>
+              <th style="width:48px" title="rescue_login 累计次数">重登</th><th style="width:96px">更新</th>
+              <th style="width:88px">备注</th><th style="width:72px">操作</th>
+            </tr></thead>
+            <tbody id="oar-poolBody"><tr><td colspan="12" class="muted">加载中…</td></tr></tbody>
+          </table>
+          <div class="oar-pager">
+            <span id="oar-pageInfo" class="muted" style="font-size:12px"></span>
+            <button class="ghost" id="oar-prevPage" type="button">上一页</button>
+            <button class="ghost" id="oar-nextPage" type="button">下一页</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 代理池 -->
+      <div id="oar-pane-proxies" class="oar-pane" style="display:none">
+        <div class="oar-statcards" id="oar-proxyStatCards"></div>
+        <div id="oar-proxyEmptyBanner" class="oar-banner" style="display:none">
+          <strong>代理池为空。</strong>请点「添加代理」导入模板，或在「批次注册」页填写代理后点「开始」——会自动写入 SQLite。注册页勾选「使用代理池」后才会按号分配并统计成功率。
+        </div>
+        <div class="panel pad" style="margin:14px 0">
+          <h3 style="margin:0 0 10px">池设置</h3>
+          <div class="oar-toolbar" style="align-items:flex-end">
+            <label class="oar-field" style="min-width:180px;margin:0"><span>分配策略</span>
+              <select id="oar-proxyStrategy" class="ghost" style="padding:7px 10px;border-radius:9px;background:#1b1f2a;color:#c8d2e8;width:100%">
+                <option value="round_robin">轮询 round_robin</option>
+                <option value="least_used">最少使用 least_used</option>
+                <option value="random">随机 random</option>
+              </select>
+            </label>
+            <label class="oar-switch"><input type="checkbox" id="oar-proxyRequireHealthy" /> 仅使用预检通过 (ok)</label>
+            <label class="oar-switch"><input type="checkbox" id="oar-proxySticky" checked /> 按账号 sticky 绑定</label>
+            <button class="btn-inline" id="btn-oar-pxSaveSettings" type="button">保存设置</button>
+          </div>
+          <p class="muted" style="font-size:11.5px;margin:8px 0 0">存储：<span class="mono" id="oar-proxyPoolFile">—</span>。成功率请到「代理统计」查看。</p>
+        </div>
+        <div class="panel pad">
+          <div class="oar-toolbar" style="margin-bottom:12px">
+            <select id="oar-proxyFilterProvider" class="ghost" style="padding:6px 10px;border-radius:9px;background:#1b1f2a;color:#9aa6bd"><option value="">全部代理商</option></select>
+            <button class="btn-run" id="btn-oar-pxAdd" type="button">添加代理</button>
+            <button class="btn-secondary" id="btn-oar-pxCheckAll" type="button">全部预检</button>
+            <button class="btn-secondary" id="btn-oar-pxCheckSel" type="button">预检选中</button>
+            <button class="btn-secondary" id="btn-oar-pxDelSel" type="button" style="color:#ff7b72">删除选中</button>
+            <span style="flex:1"></span>
+            <button class="btn-secondary" id="btn-oar-pxRefresh" type="button">刷新</button>
+            <button class="btn-secondary" id="btn-oar-pxBackfill" type="button" title="从模板推断国家">回填国家</button>
+          </div>
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="oar-pxCkAll" style="accent-color:#4f8cff" /></th>
+              <th>标签</th><th style="width:100px">代理商</th><th style="width:52px">国家</th><th>模板（脱敏）</th>
+              <th style="width:52px">{sid}</th><th style="width:64px">状态</th><th style="width:230px">出口 IP / 国家 · 类型 · 纯净度</th>
+              <th style="width:100px">分配/成功/失败</th><th style="width:110px">最近预检</th>
+              <th style="width:48px">启用</th><th style="width:60px">操作</th>
+            </tr></thead>
+            <tbody id="oar-proxyBody"><tr><td colspan="12" class="muted">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel pad" style="margin-top:14px">
+          <h3 style="margin:0 0 10px">账号绑定 <span class="muted" style="font-weight:400;font-size:12px">（注册/重登成功后自动写入）</span></h3>
+          <table class="table">
+            <thead><tr><th>邮箱</th><th>代理</th><th>会话（脱敏）</th><th>用途</th><th>绑定时间</th><th style="width:72px">操作</th></tr></thead>
+            <tbody id="oar-proxyBindBody"><tr><td colspan="6" class="muted">暂无绑定</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 代理统计 -->
+      <div id="oar-pane-proxy-stats" class="oar-pane" style="display:none">
+        <div class="oar-statcards" id="oar-pxAnalyticsStatCards"></div>
+        <div class="panel pad" style="margin-top:14px">
+          <div class="oar-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <h3 style="margin:0">成功率趋势</h3>
+            <span style="flex:1"></span>
+            <select id="oar-statsGroupBy" class="ghost" style="padding:6px 8px;border-radius:9px;background:#1b1f2a;color:#9aa6bd">
+              <option value="overview">总览</option><option value="provider" selected>按代理商</option>
+              <option value="country">按代理国</option><option value="provider_country">代理商×国家</option>
+            </select>
+            <select id="oar-statsFilterProvider" class="ghost" style="padding:6px 8px;border-radius:9px;background:#1b1f2a;color:#9aa6bd"><option value="">全部代理商</option></select>
+            <select id="oar-statsFilterCountry" class="ghost" style="padding:6px 8px;border-radius:9px;background:#1b1f2a;color:#9aa6bd"><option value="">全部代理国</option></select>
+            <select id="oar-statsFilterRegCountry" class="ghost" style="padding:6px 8px;border-radius:9px;background:#1b1f2a;color:#9aa6bd"><option value="">全部注册国</option></select>
+            <select id="oar-statsDays" class="ghost" style="padding:6px 8px;border-radius:9px;background:#1b1f2a;color:#9aa6bd">
+              <option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option>
+            </select>
+            <button class="btn-inline" id="btn-oar-statsRefresh" type="button">刷新</button>
+          </div>
+          <div id="oar-chartStage" style="position:relative;height:280px;background:#10131b;border:1px solid rgba(120,150,255,.14);border-radius:12px;padding:8px">
+            <canvas id="oar-rateChart" height="260" style="width:100%;height:260px;display:block"></canvas>
+            <div id="oar-chartEmpty" class="muted" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:13px">暂无事件数据，完成注册/重登后会自动生成曲线</div>
+            <div id="oar-chartTooltip" style="position:absolute;display:none;background:#1b2030;border:1px solid rgba(120,150,255,.3);border-radius:10px;padding:10px 12px;font-size:12px;pointer-events:none;z-index:5;min-width:200px"></div>
+          </div>
+          <div id="oar-chartLegend" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#c8d2e8"></div>
+        </div>
+        <div class="panel pad" style="margin-top:14px">
+          <h3 style="margin:0 0 10px">明细表 <span class="muted" style="font-weight:400;font-size:12px">代理商 × 代理国 × 注册国</span></h3>
+          <table class="table">
+            <thead><tr><th>代理商</th><th style="width:70px">代理国</th><th style="width:70px">注册国</th><th style="width:60px">次数</th><th style="width:60px">成功</th><th style="width:60px">失败</th><th style="width:76px">成功率</th></tr></thead>
+            <tbody id="oar-pxAnalyticsBody"><tr><td colspan="7" class="muted">暂无统计数据</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 测活 -->
+      <div id="oar-pane-verify" class="oar-pane" style="display:none">
+        <div class="panel pad" style="max-width:860px">
+          <h3 style="margin:0 0 6px">四段式可用性校验（单条）</h3>
+          <p class="muted" style="font-size:12px;margin:0">粘贴一条 <code>email----password----client_id----refresh_token</code>，判定 graph / outlook_rest / imap 是否可读信。账号池批量测活会<b>重测已标记可读信的号</b>；没有 Token 的才测不了。</p>
+          <div class="oar-grid" style="grid-template-columns:1fr;gap:10px;margin-top:14px">
+            <label class="oar-field"><span>四段式 combo</span><input type="text" id="oar-verCombo" placeholder="email----password----client_id----M.C5xx..." /></label>
+          </div>
+          <div class="oar-grid" style="gap:10px;margin-top:10px">
+            <label class="oar-field"><span>或 · 邮箱</span><input type="text" id="oar-verEmail" placeholder="you@outlook.com" /></label>
+            <label class="oar-field"><span>或 · refresh_token</span><input type="text" id="oar-verToken" placeholder="M.C5xx..." /></label>
+            <label class="oar-field"><span>代理（可选）</span><input type="text" id="oar-verProxy" placeholder="留空直连" /></label>
+          </div>
+          <div class="oar-toolbar" style="margin-top:14px">
+            <label class="oar-switch"><input type="checkbox" id="oar-verImap" checked /> 同时测 IMAP（仅老号会通）</label>
+            <button class="btn-run" id="btn-oar-verifyCombo" type="button">校验可用性</button>
+          </div>
+          <div id="oar-verResult" style="display:none;margin-top:16px">
+            <div class="oar-toolbar" style="gap:8px;margin-bottom:8px">
+              <span class="tag" id="oar-vGraph">Graph 读信: —</span><span class="tag" id="oar-vRest">Outlook REST: —</span><span class="tag" id="oar-vImap">IMAP: —</span>
+            </div>
+            <div id="oar-vSummary" class="oar-msgbox show" style="display:block"></div>
+            <p class="muted mono" id="oar-vScope" style="font-size:11.5px;word-break:break-all"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMAP / 保活 -->
+      <div id="oar-pane-ops" class="oar-pane" style="display:none">
+        <div class="panel pad" style="max-width:980px">
+          <h3 style="margin:0 0 6px">IMAP / 保活 <span class="tag" style="font-size:10px">可选 · 非必需</span></h3>
+          <p class="muted" style="font-size:12px;margin:0">防封要点：<b>固定住宅/移动 IP</b>、一个 IP 只注册/保活少量号；<b>注册后冷却</b>，别立刻高频调用；<b>低频保活</b>（每号 2–3 天一次即可）；<b>默认走 Graph 读信、不强开 IMAP</b>。</p>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">保活动作：<code>refresh_token → access_token → GET /me + 列 1 封信 → 轮换新 refresh_token 回写</code>。可对「账号池」勾选后在下方保活，或直接保活全部。</p>
+          <div class="oar-toolbar" style="margin-top:14px">
+            <button class="btn-secondary" id="btn-oar-imapEnable" type="button">开启 IMAP（尽力而为）</button>
+            <button class="btn-run" id="btn-oar-keepaliveAll" type="button">保活全部</button>
+            <button class="btn-secondary" id="btn-oar-replenish" type="button">回补收码池</button>
+            <button class="btn-secondary" id="btn-oar-dbBackup" type="button">备份数据库</button>
+          </div>
+          <p class="muted" style="font-size:11.5px;margin:8px 0 0">数据存储：<code>accounts/outlook.db</code>（账号 + 代理池 + 批次 + 元数据）。备份输出到 <code>accounts/backups/</code>。</p>
+          <div id="oar-opsMsg" class="oar-msgbox"></div>
+          <div id="oar-kaWrap" style="display:none;margin-top:12px">
+            <table class="table">
+              <thead><tr><th>邮箱</th><th>存活</th><th>profile</th><th>信件</th><th>轮换</th><th>详情</th></tr></thead>
+              <tbody id="oar-kaBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- O 弹窗层 -->
+    <div id="oar-modal-bg" class="oar-modal-bg">
+      <div class="oar-modal" id="oar-modal-box"><!-- 动态填充 --></div>
+    </div>
+
+    <section id="view-run" style="display:none">
+      <div id="form-panel" class="panel">
+        <p class="loading-state">正在载入任务…</p>
+      </div>
+      <div class="panel log-panel">
+        <div class="log-head">
+          <div class="log-heading">
+            <span id="log-title">运行日志</span>
+            <span id="run-state" class="run-state idle" role="status" aria-live="polite">待运行</span>
+          </div>
+          <div class="log-actions">
+            <button id="btn-stop" class="btn-stop" disabled>停止当前</button>
+            <button id="btn-stop-all" class="btn-stop-all" title="停止本项目的全部注册任务">
+              <span aria-hidden="true">■</span><span>停止全部</span>
+            </button>
+          </div>
+        </div>
+        <pre id="log" class="log" data-empty="暂无运行输出"></pre>
+      </div>
+    </section>
+
+    <!-- 内嵌功能页(Gmail 等 iframe + 接码助手) -->
+    <section id="view-embed" style="display:none">
+      <div class="embed-wrap">
+        <div class="embed-frame-box">
+          <div class="embed-bar">
+            <span id="embed-title"></span>
+            <a id="embed-open" href="#" target="_blank" rel="noopener" class="embed-open">↗ 新标签打开</a>
+          </div>
+          <iframe id="embed-frame" class="embed-frame" src="about:blank"></iframe>
+        </div>
+        <aside id="sms-helper" class="sms-helper" style="display:none">
+          <h3>📱 接码助手</h3>
+          <p class="hint">租一个手机号填进左侧 Gmail 表单，同号 20 分钟内可多次取验证码。</p>
+          <div class="sms-field">
+            <label>服务</label>
+            <input type="text" id="sms-service" placeholder="google">
+            <label>国家ID(可选)</label>
+            <input type="text" id="sms-country" placeholder="0=按价格自动">
+          </div>
+          <button id="btn-rent" class="btn-run">获取号码</button>
+          <label class="multi-pref"><input type="checkbox" id="sms-prefer-multi" checked> 优先支持多次接码的号</label>
+          <div id="sms-rents"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Existing ChatGPT Plus accounts -> Codex OAuth -> SUB2API -->
+    <section id="view-plus" style="display:none">
+      <div class="plus-import-panel">
+        <div class="plus-import-head">
+          <div>
+            <h2>已开通 Plus 导入 SUB2API</h2>
+            <p class="plus-import-copy">授权完成后可直接批量协议提链；每个账号先检查 Plus 优惠资格。</p>
+            <span id="plus-import-state" role="status" aria-live="polite">正在检查配置</span>
+          </div>
+          <div id="plus-run-summary" class="plus-run-summary">等待任务</div>
+        </div>
+        <div class="plus-import-grid">
+          <div class="plus-import-form">
+            <div class="plus-protocol">
+              <div class="plus-protocol-head">
+                <span>批量协议提链</span>
+                <small id="plus-protocol-state">正在检查协议引擎</small>
+              </div>
+              <div class="plus-protocol-grid">
+                <label class="plus-field"><span>账号来源</span><select id="plus-protocol-source"><option value="saved">本次 / 已授权账号</option><option value="pool">号池有资格账号</option></select></label>
+                <label class="plus-field"><span>协议操作</span><select id="plus-protocol-action"><option value="">只授权导入</option><option value="extract">批量协议提链</option><option value="pay">批量协议支付（PayPal）</option></select></label>
+                <label class="plus-field"><span>提链渠道</span><select id="plus-protocol-method">
+                  <option value="paypal">PayPal · US / USD</option>
+                  <option value="gopay">GoPay · ID / IDR</option>
+                  <option value="gcash">GCash · PH / PHP</option>
+                  <option value="grabpay">GrabPay · PH / PHP</option>
+                  <option value="upi">UPI · IN / INR</option>
+                  <option value="ideal">iDEAL · NL / EUR</option>
+                  <option value="pix">PIX · BR / BRL</option>
+                  <option value="kakao">Kakao Pay · KR / KRW</option>
+                  <option value="blik" disabled>BLIK · PL / PLN（不支持批量）</option>
+                  <option value="twint">TWINT · CH / CHF</option>
+                  <option value="direct_card">Direct Card Checkout · PH / PHP</option>
+                  <option value="momo">MoMo · VN / VND</option>
+                </select></label>
+                <label class="plus-field"><span>协议并发</span><input id="plus-protocol-concurrency" type="number" min="1" max="4" value="1"></label>
+              </div>
+              <div id="plus-payment-confirm-row" class="plus-payment-actions" hidden>
+                <button id="btn-plus-payment-config" class="btn-secondary" type="button">支付资料</button>
+                <span id="plus-payment-details-state">尚未录入本次资料</span>
+                <label class="plus-payment-confirm"><input id="plus-payment-confirm" type="checkbox"><span>确认执行真实 PayPal 支付</span></label>
+              </div>
+              <div id="plus-protocol-note" class="plus-protocol-note">只处理命中免费 Plus 优惠的已授权账号；执行前会实时复检资格。</div>
+            </div>
+            <label class="plus-field plus-field-wide">
+              <span>Plus 邮箱 / Cookie / OAuth Token（每行一个）</span>
+              <textarea id="plus-account-input" spellcheck="false" autocomplete="off"
+                placeholder="Plus 卡密: email----password----2fa_secret&#10;Outlook: email----password----refresh_token----client_id&#10;iCloud 三行: 邮箱&#10;接码 API URL&#10;2FA/API token&#10;Cookie: __Secure-next-auth.session-token=...&#10;OAuth JSON: {&quot;access_token&quot;:&quot;...&quot;,&quot;refresh_token&quot;:&quot;...&quot;,...}"></textarea>
+            </label>
+            <div class="plus-controls">
+              <label class="plus-field"><span>手机号接码平台</span><select id="plus-sms-provider"><option value="auto">自动切换</option><option value="custom">自定义号码池</option><option value="smsman">SMS-Man</option><option value="firefox">firefox.fun</option><option value="hero">Hero SMS</option></select></label>
+              <label class="plus-field"><span>单账号换号次数</span><input id="plus-phone-attempts" type="number" min="1" max="10" value="3"></label>
+              <label class="plus-field"><span>单号等码秒数</span><input id="plus-sms-timeout" type="number" min="30" max="600" value="180"></label>
+              <label class="plus-field"><span>并发账号数</span><input id="plus-concurrency" type="number" min="1" max="5" value="1"></label>
+              <label class="plus-field"><span>SUB2API 分组</span><input id="plus-group" type="text" value="codex"></label>
+              <label class="plus-field"><span>Token 输出</span><select id="plus-output-format"><option value="none">不额外输出</option><option value="sub2api">SUB2API token JSON</option></select></label>
+              <label class="plus-field"><span>ChatGPT 节点</span><input id="plus-node" type="text" value="auto"></label>
+            </div>
+            <details id="custom-sms-import" class="custom-sms-import">
+              <summary>自定义号码池 <span id="custom-sms-summary">正在读取</span></summary>
+              <label class="plus-field plus-field-wide">
+                <span>号码与短信记录 URL（每行一个）</span>
+                <textarea id="custom-sms-input" spellcheck="false" autocomplete="off" placeholder="+13435775857----https://example.com/smsrecord?token=..."></textarea>
+              </label>
+              <div class="custom-sms-actions">
+                <button id="btn-custom-sms-import" class="btn-secondary" type="button">批量导入号码</button>
+                <span id="custom-sms-message" role="status" aria-live="polite"></span>
+              </div>
+            </details>
+            <label class="plus-toggle"><input id="plus-keep-on-fail" type="checkbox"><span>失败时保留浏览器</span></label>
+            <label class="plus-toggle"><input id="plus-skip-phone" type="checkbox"><span>跳过手机号 / 2FA 验证</span></label>
+            <label class="plus-toggle"><input id="plus-no-import" type="checkbox"><span>仅保存凭据，不导入 SUB2API</span></label>
+            <div class="plus-import-actions">
+              <button id="btn-plus-import" class="btn-run" type="button">开始授权导入</button>
+              <button id="btn-plus-protocol-run" class="btn-secondary" type="button">执行协议任务</button>
+              <button id="btn-plus-stop" class="btn-secondary" type="button" disabled>停止任务</button>
+            </div>
+          </div>
+          <div class="plus-log-surface">
+            <div class="plus-stage-row">
+              <span>邮箱登录</span><span>手机号验证</span><span>OAuth / SUB2API</span><span>资格 / 协议提链</span>
+            </div>
+            <pre id="plus-run-log" data-empty="任务日志"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="plus-payment-dialog" class="plus-payment-dialog" aria-labelledby="plus-payment-title">
+      <div class="plus-payment-dialog-head">
+        <div><h3 id="plus-payment-title">本次 PayPal 支付资料</h3><span>仅用于当前任务，不写入配置或报告</span></div>
+        <button id="btn-plus-payment-close" class="icon-button" type="button" title="关闭" aria-label="关闭">×</button>
+      </div>
+      <div class="plus-payment-dialog-body">
+        <label class="plus-field plus-field-wide"><span>卡片（每行一张）</span><textarea id="plus-payment-cards" spellcheck="false" autocomplete="off" placeholder="卡号|MM/YY|CVC"></textarea></label>
+        <label class="plus-field plus-field-wide"><span>美国账单地址（每行一个）</span><textarea id="plus-payment-addresses" spellcheck="false" autocomplete="off" placeholder="街道|城市|州|邮编"></textarea></label>
+        <label class="plus-field plus-field-wide"><span>手机号接码（每行一个）</span><textarea id="plus-payment-phones" spellcheck="false" autocomplete="off" placeholder="+国家码手机号----短信记录 URL"></textarea></label>
+      </div>
+      <div class="plus-payment-dialog-foot">
+        <span id="plus-payment-dialog-message" role="status" aria-live="polite"></span>
+        <button id="btn-plus-payment-apply" class="btn-run" type="button">用于本次任务</button>
+      </div>
+    </dialog>
+
+    <!-- 邮箱池视图 -->
+    <section id="view-mailpool" style="display:none">
+      <div class="panel">
+        <div class="env-head">
+          <h2>批量导入邮箱池</h2>
+          <span id="mailpool-total" class="env-msg"></span>
+        </div>
+        <p class="hint">外部邮箱直接入池，每行一个。支持 Outlook / Hotmail / Live / MSN 各地域域名、iCloud / me.com / mac.com 和自定义邮箱。<br>
+          格式：<code>邮箱----密码----refresh_token----client_id</code>，也兼容 client_id/RT 反序、JSON 对象、逗号、制表符、竖线、分号及简单邮箱:密码。纯 Cookie 或 token 不会写入邮箱池；重复邮箱自动跳过。</p>
+        <textarea id="mailpool-input" class="mailpool-input" spellcheck="false"
+          placeholder="aaa@outlook.com----Pass123----M.C5xx...----9e5f94bc-...&#10;bbb@outlook.com----Pass456"></textarea>
+        <div>
+          <button id="btn-import-mail" class="btn-run">导入到邮箱池</button>
+          <span id="mailpool-msg" class="env-msg"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 本地资产 API -->
+    <section id="view-assets" style="display:none">
+      <div class="panel asset-panel">
+        <div class="asset-head">
+          <div>
+            <h2>资产 API</h2>
+            <p>直接一次性领取邮箱或平台凭据，再转换为下游需要的格式；状态扫描按需手动运行。</p>
+          </div>
+          <button id="btn-refresh-assets" class="icon-button" type="button" title="刷新资产统计" aria-label="刷新资产统计">↻</button>
+        </div>
+
+        <div id="asset-summary" class="asset-summary" aria-live="polite">
+          <div><span>邮箱</span><strong id="asset-count-emails">--</strong></div>
+          <div><span>ChatGPT</span><strong id="asset-count-chatgpt">--</strong></div>
+          <div><span>Claude</span><strong id="asset-count-claude">--</strong></div>
+          <div><span>Grok</span><strong id="asset-count-grok">--</strong></div>
+          <div><span>Kiro</span><strong id="asset-count-kiro">--</strong></div>
+        </div>
+
+        <section class="asset-section asset-pool" aria-labelledby="asset-pool-title" data-guide="asset-scan">
+          <div class="asset-section-head asset-pool-head">
+            <div>
+              <h3 id="asset-pool-title">号池状态</h3>
+              <p>同平台账号低频串行扫描，近期结果自动复用；遇到限流或连续风控响应会暂停该平台。</p>
+            </div>
+            <div class="asset-scan-actions">
+              <label class="asset-scan-concurrency"><span>平台并行</span>
+                <select id="asset-scan-concurrency"><option value="1" selected>1（最稳）</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
+              </label>
+              <label class="asset-scan-concurrency"><span>账号并行</span>
+                <select id="asset-scan-account-concurrency"><option value="1">1</option><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option><option value="16">16</option><option value="32">32</option></select>
+              </label>
+              <label class="asset-scan-concurrency"><input id="asset-scan-plus-trial" type="checkbox"><span>同时检测 Plus 资格</span></label>
+              <button id="btn-scan-current" class="btn-secondary" type="button">扫描当前类型</button>
+              <button id="btn-scan-all" class="btn-run" type="button">一键扫描全部</button>
+            </div>
+          </div>
+
+          <div id="asset-scan-progress" class="asset-scan-progress">
+            <progress id="asset-scan-progress-bar" max="1" value="0"></progress>
+            <div><span id="asset-scan-progress-text">尚未扫描</span><span id="asset-scan-time"></span></div>
+          </div>
+
+          <div class="asset-status-summary" aria-label="号池状态统计">
+            <button type="button" data-scan-status="normal"><span>正常</span><strong id="asset-status-normal">0</strong></button>
+            <button type="button" data-scan-status="unlock"><span>待解锁</span><strong id="asset-status-unlock">0</strong></button>
+            <button type="button" data-scan-status="banned"><span>封禁</span><strong id="asset-status-banned">0</strong></button>
+            <button type="button" data-scan-status="expired"><span>过期</span><strong id="asset-status-expired">0</strong></button>
+            <button type="button" data-scan-status="restricted"><span>受限</span><strong id="asset-status-restricted">0</strong></button>
+            <button type="button" data-scan-status="invalid"><span>凭据异常</span><strong id="asset-status-invalid">0</strong></button>
+            <button type="button" data-scan-status="unknown"><span>未知</span><strong id="asset-status-unknown">0</strong></button>
+            <button type="button" data-scan-status="error"><span>检测异常</span><strong id="asset-status-error">0</strong></button>
+          </div>
+
+          <div class="asset-scan-toolbar">
+            <label><span>类型</span><select id="asset-scan-platform">
+              <option value="all">全部类型</option>
+              <option value="outlook">Outlook 邮箱</option>
+              <option value="chatgpt">ChatGPT</option>
+              <option value="claude">Claude</option>
+              <option value="grok">Grok</option>
+              <option value="kiro">Kiro</option>
+            </select></label>
+            <label><span>状态</span><select id="asset-scan-status">
+              <option value="all">全部状态</option>
+              <option value="normal">正常</option>
+              <option value="unlock">待解锁</option>
+              <option value="banned">封禁</option>
+              <option value="expired">过期</option>
+              <option value="restricted">受限</option>
+              <option value="invalid">凭据异常</option>
+              <option value="unknown">未知</option>
+              <option value="error">检测异常</option>
+            </select></label>
+            <span id="asset-scan-result-count" class="asset-scan-result-count">0 条</span>
+            <span id="asset-scan-msg" class="asset-message" role="status" aria-live="polite"></span>
+          </div>
+
+          <div class="asset-scan-table-wrap">
+            <table class="asset-scan-table">
+              <thead><tr><th>类型</th><th>账号</th><th>国家 / 网络</th><th>状态</th><th>Plus 优惠</th><th>检测结果</th><th>检测时间</th></tr></thead>
+              <tbody id="asset-scan-rows"></tbody>
+            </table>
+            <div id="asset-scan-empty" class="asset-scan-empty">暂无号池资产</div>
+          </div>
+          <div class="asset-scan-pagination">
+            <button id="btn-scan-prev" class="icon-button" type="button" title="上一页" aria-label="上一页">‹</button>
+            <span id="asset-scan-page">1 / 1</span>
+            <button id="btn-scan-next" class="icon-button" type="button" title="下一页" aria-label="下一页">›</button>
+          </div>
+        </section>
+
+        <section class="asset-section" aria-labelledby="asset-access-title">
+          <div class="asset-section-head">
+            <div><h3 id="asset-access-title">访问配置</h3><p>留空仅允许本机调用；设置后支持 <code>X-API-Key</code> 或 Bearer Token。</p></div>
+            <span id="asset-key-msg" class="asset-message" role="status"></span>
+          </div>
+          <div class="asset-config-grid">
+            <label class="asset-field"><span>API 地址</span><input id="asset-api-base" type="text" readonly></label>
+            <label class="asset-field"><span>API Key</span><div class="password-control"><input id="asset-api-key" type="password" autocomplete="off" placeholder="留空时仅限本机"><button type="button" class="password-toggle" data-password-target="asset-api-key" title="显示 API Key" aria-label="显示 API Key">👁</button></div></label>
+          </div>
+          <button id="btn-save-asset-key" class="btn-secondary" type="button">保存 API Key</button>
+        </section>
+
+        <section class="asset-section" aria-labelledby="asset-call-title" data-guide="asset-call">
+          <div class="asset-section-head">
+            <div><h3 id="asset-call-title">调用与输出</h3><p>直接返回尚未领取的本地账号，不在输出前在线检测；领取后跨输出格式排除，指定 index 同样只领取一次。</p></div>
+          </div>
+          <div class="asset-builder-grid">
+            <label class="asset-field"><span>资产</span>
+              <select id="asset-resource">
+                <option value="emails">邮箱</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="claude">Claude</option>
+                <option value="grok">Grok</option>
+                <option value="kiro">Kiro</option>
+              </select>
+            </label>
+            <label class="asset-field"><span>输出格式</span><select id="asset-format"></select></label>
+            <label class="asset-field"><span>注册邮箱来源</span>
+              <select id="asset-email-provider"><option value="">全部</option><option value="outlook">Outlook 四段式</option><option value="icloud">iCloud</option></select>
+            </label>
+            <div class="asset-field asset-pick-field"><span>取用方式</span>
+              <div class="asset-mode-switch" role="group" aria-label="资产取用方式">
+                <button type="button" data-asset-pick="sequence" class="active">顺序取用</button>
+                <button type="button" data-asset-pick="index">指定 index</button>
+              </div>
+            </div>
+            <label class="asset-field"><span>Index</span><input id="asset-index" type="number" min="0" step="1" value="0" disabled></label>
+            <label class="asset-field"><span>批量数量</span><input id="asset-batch-limit" type="number" min="1" max="500" step="1" value="100"></label>
+          </div>
+          <label class="asset-normal-only">
+            <input id="asset-normal-only" type="checkbox">
+            <span>仅领取最近一次扫描为正常的邮箱</span>
+          </label>
+
+          <label class="asset-field">
+            <span>按扫描状态领取</span>
+            <select id="asset-status-filter">
+              <option value="">不按状态筛选</option>
+              <option value="normal">正常</option>
+              <option value="unlock">待解锁</option>
+              <option value="banned">封禁</option>
+              <option value="expired">过期</option>
+              <option value="restricted">受限</option>
+              <option value="invalid">凭据异常</option>
+              <option value="unknown">未知</option>
+              <option value="error">检测异常</option>
+            </select>
+          </label>
+          <div class="asset-request">
+            <div class="asset-request-head"><span>请求地址</span><button id="btn-copy-url" class="btn-inline" type="button">复制地址</button></div>
+            <code id="asset-request-url"></code>
+          </div>
+          <div class="asset-request">
+            <div class="asset-request-head"><span>curl 调用示例</span><button id="btn-copy-curl" class="btn-inline" type="button">复制命令</button></div>
+            <pre id="asset-curl-example"></pre>
+          </div>
+
+          <div class="asset-actions">
+            <button id="btn-call-asset" class="btn-run" type="button">直接领取</button>
+            <button id="btn-export-assets" class="btn-secondary" type="button">批量导出正常号并移出号池</button>
+            <select id="asset-reset-scope" aria-label="领取记录重置范围"><option value="current">重置当前资产领取记录</option><option value="all">重置全部领取记录</option></select>
+            <button id="btn-reset-asset" class="btn-secondary" type="button">重置</button>
+            <span id="asset-call-msg" class="asset-message" role="status" aria-live="polite"></span>
+          </div>
+          <pre id="asset-response" class="asset-response" data-empty="调用结果将在这里显示"></pre>
+        </section>
+
+        <section class="asset-section asset-mailbox" aria-labelledby="asset-mailbox-title">
+          <div class="asset-section-head">
+            <div><h3 id="asset-mailbox-title">邮箱资产清单（含密码）</h3><p>直接回扫本机 emails.txt、outlook_no_graph.txt 与 exported 目录，无视「已领取」状态，每条密码都可见、可单独或批量导出。</p></div>
+            <button id="btn-refresh-mailbox" class="icon-button" type="button" title="刷新邮箱清单" aria-label="刷新邮箱清单">↻</button>
+          </div>
+          <div class="asset-scan-toolbar">
+            <input id="mailbox-search" type="text" placeholder="搜索邮箱…" style="max-width:200px">
+            <label><span>类型</span><select id="mailbox-provider">
+              <option value="">全部</option><option value="outlook">outlook</option><option value="icloud">icloud</option><option value="temporary">temporary</option><option value="other">other</option>
+            </select></label>
+            <label><input type="checkbox" id="mailbox-only-claimed"><span>只看已领取</span></label>
+            <label><input type="checkbox" id="mailbox-hide-pw" checked><span>默认隐藏密码</span></label><button type="button" class="btn-inline" id="btn-mailbox-toggle-pw">👁 显示全部</button>
+            <button id="btn-mailbox-export-sel" class="btn-secondary" type="button">导出选中</button>
+            <button id="btn-mailbox-export-all" class="btn-run" type="button">导出全部</button>
+            <label><span>格式</span><select id="mailbox-fmt"><option value="four">四段 txt</option><option value="json">JSON</option></select></label>
+            <span id="mailbox-msg" class="asset-message" role="status" aria-live="polite"></span>
+          </div>
+          <div class="asset-scan-table-wrap">
+            <table class="asset-scan-table">
+              <thead><tr>
+                <th style="width:30px"><input type="checkbox" id="mailbox-selall"></th>
+                <th>邮箱</th><th>密码</th><th>refresh_token</th><th>client_id</th><th>类型</th><th>状态</th><th>来源</th><th>操作</th>
+              </tr></thead>
+              <tbody id="mailbox-rows"></tbody>
+            </table>
+            <div id="mailbox-empty" class="asset-scan-empty">暂无邮箱资产</div>
+          </div>
+        </section>
+
+        <section class="asset-section asset-reference" aria-labelledby="asset-reference-title">
+          <div class="asset-section-head"><div><h3 id="asset-reference-title">接口速查</h3></div></div>
+          <div class="asset-endpoints">
+            <code>GET /api/assets/emails</code><span><code>json</code>、<code>line</code></span>
+            <code>GET /api/assets/mailbox-inventory</code><span>本机全部邮箱四段凭据（含密码，无视领取状态）</span>
+            <code>GET /api/assets/cookies/chatgpt</code><span><code>raw</code>、<code>header</code>、<code>session</code>、<code>email_four</code>、<code>sub2api</code>、<code>cpa</code>、<code>chatgpt2api</code></span>
+            <code>GET /api/assets/cookies/claude</code><span><code>raw</code>、<code>header</code></span>
+            <code>GET /api/assets/cookies/grok</code><span><code>raw</code>、<code>header</code>、<code>session</code>、<code>sub2api</code></span>
+            <code>GET /api/assets/cookies/kiro</code><span><code>session</code></span>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- 网络出口视图 -->
+    <section id="view-network" style="display:none">
+      <div class="panel network-panel">
+        <div class="network-head">
+          <div>
+            <h2>网络出口</h2>
+            <p>统一控制注册任务使用的 Clash 节点或住宅代理。</p>
+          </div>
+          <div class="network-current">
+            <span class="dot pending" id="network-current-dot"></span>
+            <span id="network-current">正在读取配置</span>
+          </div>
+        </div>
+
+        <div class="mode-switch" role="group" aria-label="代理模式">
+          <button type="button" data-proxy-mode="clash_auto">自动轮换</button>
+          <button type="button" data-proxy-mode="clash_fixed">固定节点</button>
+          <button type="button" data-proxy-mode="residential">动态住宅 IP</button>
+        </div>
+
+        <div id="network-clash-fields" class="network-fields" data-guide="clash-config">
+          <div class="network-section-title">Clash 连接</div>
+          <div class="network-grid">
+            <label class="network-field"><span>控制器地址</span><input id="proxy-clash-api" type="text" placeholder="http://127.0.0.1:9097"></label>
+            <label class="network-field"><span>控制器密钥</span><input id="proxy-clash-secret" type="password" autocomplete="off"></label>
+            <label class="network-field"><span>混合代理地址</span><input id="proxy-clash-proxy" type="text" placeholder="http://127.0.0.1:7897"></label>
+            <label class="network-field"><span>代理组</span><input id="proxy-clash-group" type="text" placeholder="GLOBAL"></label>
+          </div>
+          <div id="network-fixed-field" class="network-fixed-row">
+            <label class="network-field"><span>固定节点</span><select id="proxy-fixed-node"></select></label>
+            <button id="btn-refresh-nodes" class="icon-button" type="button" title="刷新节点" aria-label="刷新节点">↻</button>
+          </div>
+        </div>
+
+        <div id="network-residential-fields" class="network-fields" style="display:none">
+          <div class="network-section-title">住宅代理</div>
+          <div class="network-grid">
+            <label class="network-field network-field-wide"><span>单个代理</span><input id="proxy-residential-url" type="password" autocomplete="off" placeholder="http://user:pass@host:port"></label>
+            <label class="network-field network-field-wide"><span>代理池</span><textarea id="proxy-residential-pool" spellcheck="false" placeholder="每行一个代理，配置代理池后优先使用代理池"></textarea></label>
+            <label class="network-field"><span>换 IP 接口</span><input id="proxy-rotate-url" type="password" autocomplete="off" placeholder="https://provider.example/rotate"></label>
+            <label class="network-field"><span>请求方法</span><select id="proxy-rotate-method"><option>GET</option><option>POST</option></select></label>
+            <label class="network-field"><span>ChatGPT 拦截轮换上限</span><input id="proxy-chatgpt-retries" type="number" min="1" step="1" value="3"></label>
+            <label class="network-field"><span>住宅流量模式</span><select id="proxy-traffic-mode"><option value="extreme">极限节流</option><option value="aggressive">激进节流</option><option value="balanced">平衡节流</option><option value="off">关闭节流</option></select></label>
+          </div>
+        </div>
+
+        <div class="network-fields" data-guide="platform-proxy-overrides">
+          <div class="network-section-title">平台出口覆盖</div>
+          <div class="network-grid">
+            <label class="network-field"><span>Outlook</span><select id="proxy-mode-outlook" data-platform-proxy><option value="inherit">继承全局</option><option value="clash_auto">Clash 自动</option><option value="clash_fixed">Clash 固定</option><option value="residential">动态住宅 IP</option></select></label>
+            <label class="network-field"><span>Claude</span><select id="proxy-mode-claude" data-platform-proxy><option value="inherit">继承全局</option><option value="clash_auto">Clash 自动</option><option value="clash_fixed">Clash 固定</option><option value="residential">动态住宅 IP</option></select></label>
+            <label class="network-field"><span>ChatGPT</span><select id="proxy-mode-chatgpt" data-platform-proxy><option value="inherit">继承全局</option><option value="clash_auto">Clash 自动</option><option value="clash_fixed">Clash 固定</option><option value="residential">动态住宅 IP</option></select></label>
+            <label class="network-field"><span>Grok</span><select id="proxy-mode-grok" data-platform-proxy><option value="inherit">继承全局</option><option value="clash_auto">Clash 自动</option><option value="clash_fixed">Clash 固定</option><option value="residential">动态住宅 IP</option></select></label>
+            <label class="network-field"><span>Kiro</span><select id="proxy-mode-kiro" data-platform-proxy><option value="inherit">继承全局</option><option value="clash_auto">Clash 自动</option><option value="clash_fixed">Clash 固定</option><option value="residential">动态住宅 IP</option></select></label>
+            <label class="network-field"><span>轮换/测试目标</span><select id="proxy-platform-target"><option value="">全局出口</option><option value="outlook">Outlook</option><option value="claude">Claude</option><option value="chatgpt">ChatGPT</option><option value="grok">Grok</option><option value="kiro">Kiro</option></select></label>
+          </div>
+        </div>
+
+        <div class="network-fields" data-guide="protocol-proxy-overrides">
+          <div class="network-section-title">协议出口</div>
+          <div class="network-grid">
+            <label class="network-field"><span>提链代理</span><input id="proxy-plus-link-override" type="password" autocomplete="off" placeholder="http://user:pass@host:port"></label>
+            <label class="network-field"><span>支付代理</span><input id="proxy-plus-bind-override" type="password" autocomplete="off" placeholder="http://user:pass@host:port"></label>
+          </div>
+        </div>
+
+        <div class="network-fields">
+          <div class="network-section-title">并发控制</div>
+          <div class="network-grid">
+            <label class="network-field"><span>最大并发数</span><input id="proxy-max-concurrency" type="number" min="1" max="100" step="1" value="10"></label>
+            <label class="network-field network-check-field"><span>允许共享出口</span><input id="proxy-allow-shared-egress" type="checkbox"></label>
+          </div>
+        </div>
+
+        <div class="network-actions" data-guide="network-actions">
+          <button id="btn-save-proxy" class="btn-run" type="button">保存并应用</button>
+          <button id="btn-rotate-proxy" class="btn-secondary" type="button">立即轮换</button>
+          <button id="btn-test-proxy" class="btn-secondary" type="button">应用并测试 IP</button>
+          <span id="proxy-msg" class="network-message" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- A 总览（原生重写 his Dashboard：统计卡 + 平台分布 + 状态分布） -->
+    <!-- A 账号管理（原生重写 his Accounts：筛选 chips + 工具栏 + 表格 + 新增/导入弹窗） -->
+    <!-- A 自动注册（原生重写 his Register：身份/执行方式选择 + 数量并发 + 编排摘要 + 日志轮询） -->
+    <section id="view-aarregister" style="display:none">
+      <div class="dash-head">
+        <div><h1 class="dash-title">自动注册</h1><p class="dash-sub">选择平台 / 注册身份 / 执行方式，构建注册任务</p></div>
+      </div>
+      <div class="dash-cols">
+        <div>
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-head"><h3>基本配置</h3></div>
+            <div class="aar-form-grid">
+              <label class="asset-field"><span>平台</span><select id="ar-platform"></select></label>
+              <label class="asset-field"><span>批量数量</span><input id="ar-count" type="number" min="1" max="99" value="1"></label>
+              <label class="asset-field"><span>代理 (可选)</span><input id="ar-proxy" type="text" placeholder="http://user:pass@host:port"></label>
+            </div>
+          </div>
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-head"><h3>Step 1 · 注册身份</h3></div>
+            <div class="aar-option-list" id="ar-identity-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>Step 2 · 执行通道</h3></div>
+            <div class="aar-option-list" id="ar-executor-list"></div>
+          </div>
+        </div>
+        <div>
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-head"><h3>当前编排摘要</h3></div>
+            <div class="aar-chips" id="ar-chips"></div>
+            <div style="margin-top:14px"><button id="btn-ar-start" class="btn-run" style="width:100%">▶ 开始注册</button></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>执行状态</h3><span id="ar-task-badge" class="badge">未启动</span></div>
+            <div class="health-row"><span class="h-label">进度</span><span class="badge" id="ar-progress">--</span></div>
+            <div class="health-row"><span class="h-label">成功 / 失败</span><span class="badge" id="ar-success-fail">--</span></div>
+            <div class="health-row"><span class="h-label">任务 ID</span><span class="badge" id="ar-task-id">--</span></div>
+          </div>
+          <div class="panel log-panel" style="margin-top:16px">
+            <div class="log-head"><div class="log-heading"><span>实时日志</span></div></div>
+            <pre id="ar-log" data-empty="任务日志将在这里显示" style="max-height:320px"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- A 任务记录（原生重写 his TaskHistory：指标卡 + 筛选 + 表格） -->
+    <!-- A 代理池（原生重写 his Proxies：指标卡 + 新增表单 + 列表开关删除） -->
+    <section id="view-aarproxies" style="display:none">
+      <div class="dash-head">
+        <div><h1 class="dash-title">代理资源</h1><p class="dash-sub">代理池管理与可用性检测</p></div>
+        <button id="btn-ap-check" class="ghost">⟳ 检测全部</button>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">代理数</div><div class="stat-value" id="ap-total">0</div></div>
+        <div class="stat-card"><div class="stat-label">启用</div><div class="stat-value" id="ap-active">0</div></div>
+        <div class="stat-card"><div class="stat-label">成功次数</div><div class="stat-value" id="ap-ok">0</div></div>
+        <div class="stat-card"><div class="stat-label">失败次数</div><div class="stat-value" id="ap-fail">0</div></div>
+      </div>
+      <div class="dash-cols">
+        <div class="panel">
+          <div class="panel-head"><h3>新增代理</h3></div>
+          <textarea id="ap-input" rows="8" spellcheck="false" placeholder="http://user:pass@host:port&#10;每行一个，支持批量粘贴"></textarea>
+          <label class="asset-field" style="margin-top:10px"><span>地区标签 (可选)</span><input id="ap-region" type="text" placeholder="如 US, SG"></label>
+          <div style="margin-top:12px"><button id="btn-ap-add" class="btn-run" style="width:100%">添加到代理池</button></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>代理列表</h3><span class="src" id="ap-count">0 条</span></div>
+          <div class="asset-scan-table-wrap">
+            <table class="asset-scan-table">
+              <thead><tr><th>代理地址</th><th>地区</th><th>成功/失败</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody id="ap-rows"></tbody>
+            </table>
+            <div id="ap-empty" class="asset-scan-empty">暂无代理，左侧添加或批量粘贴</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- A 服务配置（原生重写 his Settings：选项卡 + provider 卡片组） -->
+    <section id="view-aarsettings" style="display:none">
+      <div class="dash-head">
+        <div><h1 class="dash-title">服务配置</h1><p class="dash-sub">邮箱服务 / 验证服务 / 接码服务 / ChatGPT 出口</p></div>
+      </div>
+      <div class="aar-tabs" id="as-tabs">
+        <button class="active" data-as-tab="mailbox">邮箱服务</button>
+        <button data-as-tab="captcha">验证服务</button>
+        <button data-as-tab="sms">接码服务</button>
+        <button data-as-tab="chatgpt">ChatGPT</button>
+        <button data-as-tab="general">通用策略</button>
+      </div>
+      <div class="panel">
+        <div id="as-provider-cards" class="aar-cards-grid"></div>
+        <div id="as-general" style="display:none">
+          <div class="aar-form-grid">
+            <label class="asset-field"><span>默认注册身份</span><select id="ag-identity"></select></label>
+            <label class="asset-field"><span>默认第三方入口</span><select id="ag-oauth"></select></label>
+            <label class="asset-field"><span>默认执行方式</span><select id="ag-executor"></select></label>
+          </div>
+          <div style="margin-top:14px"><button id="btn-ag-save" class="btn-run">保存配置</button></div>
+        </div>
+        <div id="as-chatgpt" style="display:none">
+          <div class="aar-form-grid">
+            <label class="asset-field"><span>CPA API URL</span><input id="ac-cpa-url" type="text" placeholder="https://..."></label>
+            <label class="asset-field"><span>CPA API Key</span><input id="ac-cpa-key" type="password" autocomplete="off"></label>
+            <label class="asset-field"><span>Any2Api URL</span><input id="ac-any2api-url" type="text" placeholder="https://..."></label>
+            <label class="asset-field"><span>Any2Api 密码</span><input id="ac-any2api-pw" type="password" autocomplete="off"></label>
+          </div>
+          <div style="margin-top:14px"><button id="btn-ac-save" class="btn-run">保存配置</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 弹窗：Provider 配置（添加/编辑/测试） -->
+    <dialog id="as-dialog" class="contact-dialog">
+      <button class="dialog-close" type="button" onclick="this.closest('dialog').close()" aria-label="关闭">×</button>
+      <h3 id="as-dialog-title" style="margin:0 0 6px;font-size:15px">配置服务</h3>
+      <p id="as-dialog-desc" class="hint" style="margin-top:0"></p>
+      <div id="as-dialog-fields"></div>
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;align-items:center">
+        <span id="as-dialog-msg" role="status"></span>
+        <button id="btn-as-test" class="ghost" type="button">测试连接</button>
+        <button class="ghost" type="button" onclick="this.closest('dialog').close()">取消</button>
+        <button id="btn-as-save" class="btn-run" type="button">保存</button>
+      </div>
+    </dialog>
+
+    <!-- 弹窗：手动新增 / 批量导入 -->
+    <dialog id="aa-add-dialog" class="contact-dialog">
+      <button class="dialog-close" type="button" onclick="this.closest('dialog').close()" aria-label="关闭">×</button>
+      <h3 style="margin:0 0 12px;font-size:15px">手动新增账号</h3>
+      <label class="asset-field"><span>邮箱 (email)</span><input id="ad-email" type="text" placeholder="user@example.com"></label>
+      <label class="asset-field"><span>密码 (password)</span><input id="ad-password" type="text"></label>
+      <label class="asset-field"><span>主凭证 (primary_token)</span><input id="ad-token" type="text"></label>
+      <label class="asset-field"><span>试用链接 (cashier_url)</span><input id="ad-cashier" type="text"></label>
+      <label class="asset-field"><span>生命周期状态</span><select id="ad-status">
+        <option value="registered">已注册</option><option value="trial">试用中</option><option value="subscribed">已订阅</option>
+      </select></label>
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+        <button class="ghost" type="button" onclick="this.closest('dialog').close()">取消</button>
+        <button id="btn-ad-save" class="btn-run" type="button">保存</button>
+      </div>
+    </dialog>
+    <dialog id="aa-import-dialog" class="contact-dialog">
+      <button class="dialog-close" type="button" onclick="this.closest('dialog').close()" aria-label="关闭">×</button>
+      <h3 style="margin:0 0 12px;font-size:15px">批量导入</h3>
+      <p class="hint" style="margin-top:0">每行一个：<code>email password [cashier_url]</code></p>
+      <textarea id="ai-lines" rows="8" spellcheck="false" placeholder="user@example.com Pass123 https://..."></textarea>
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+        <button class="ghost" type="button" onclick="this.closest('dialog').close()">取消</button>
+        <button id="btn-ai-save" class="btn-run" type="button">导入</button>
+      </div>
+    </dialog>
+
+    <!-- 配置视图 -->
+    <section id="view-env" style="display:none">
+      <div class="panel">
+        <div class="env-head">
+          <h2>环境配置 (.env)</h2>
+          <button id="btn-save-env" class="btn-run">保存配置</button>
+          <span id="env-msg" class="env-msg"></span>
+        </div>
+        <p class="hint">密钥只保存在本机 .env，不上传。保存后新任务立即使用，无需重启服务。必填项标 <span class="req">*</span>。</p>
+        <div id="env-groups"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="telegram-dialog" class="contact-dialog">
+  <button id="btn-telegram-close" class="dialog-close" type="button" aria-label="关闭">×</button>
+  <img src="/assets/telegram_qr.jpg" alt="TIANTIANAI Telegram 二维码">
+  <a href="https://t.me/TIANTIANAIPRO" target="_blank" rel="noopener">@TIANTIANAIPRO</a>
+</dialog>
+
+<div id="tour-layer" class="tour-layer" hidden aria-hidden="true">
+  <div id="tour-curtain-top" class="tour-curtain"></div>
+  <div id="tour-curtain-left" class="tour-curtain"></div>
+  <div id="tour-curtain-right" class="tour-curtain"></div>
+  <div id="tour-curtain-bottom" class="tour-curtain"></div>
+  <div id="tour-spotlight" class="tour-spotlight" aria-hidden="true"></div>
+  <section id="tour-popover" class="tour-popover" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+    <div class="tour-head">
+      <span id="tour-section" class="tour-section">新手指南</span>
+      <button id="btn-tour-close" class="tour-close" type="button" aria-label="跳过新手指南">关闭</button>
+    </div>
+    <div class="tour-progress" aria-hidden="true">
+      <span id="tour-progress-label">1 / 1</span>
+      <span class="tour-progress-track"><span id="tour-progress-bar"></span></span>
+    </div>
+    <h2 id="tour-title"></h2>
+    <div id="tour-body" class="tour-body"></div>
+    <div class="tour-actions">
+      <button id="btn-tour-exit" class="tour-button tour-button-quiet" type="button">跳过指南</button>
+      <button id="btn-tour-skip-section" class="tour-button tour-button-quiet" type="button" hidden></button>
+      <span class="tour-action-spacer"></span>
+      <button id="btn-tour-prev" class="tour-button" type="button">上一步</button>
+      <button id="btn-tour-next" class="tour-button tour-button-primary" type="button">下一步</button>
+    </div>
+  </section>
+</div>
+
+<script src="/static/app.js?v=20260828-cyber3"></script>
+<script src="/static/oar_page.js?v=20260828-cyber3"></script>
+</body>
+</html>
+

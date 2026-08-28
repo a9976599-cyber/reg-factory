@@ -1,0 +1,17 @@
+{
+  "name": "arkose_match",
+  "frame_match": ["arkoselabs", "funcaptcha", "arkose"],
+  "mode": "single_pick",
+  "ref_sel": ".key-frame-image",
+  "cand_sel": ".answer-frame img, .answer-frame canvas, .answer-frame",
+  "next_btn_role": "Navigate to next image",
+  "prev_btn_role": "Navigate to previous image",
+  "submit_role": "Submit",
+  "answer_format": "ANSWER_INDEX",
+  "cols": 3,
+  "max_rounds": 8,
+  "deadline": 55,
+  "settle_ms": 1000,
+  "success_gone_frame": true,
+  "prompt": "You are an accessibility helper solving an Arkose visual matching puzzle. Top = REFERENCE ('Match This!') target icon(s). Below = numbered candidates #0..#{last}. Task: \"{instruction}\". Pick the ONE candidate matching the reference; match by underlying SHAPE, ignoring rotation and black/white fill inversion. Reason briefly, then output the VERY LAST line exactly: ANSWER=<number> (e.g. ANSWER=2)."
+}

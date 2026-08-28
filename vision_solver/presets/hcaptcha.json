@@ -1,0 +1,20 @@
+{
+  "name": "hcaptcha",
+  "frame_match": ["frame=challenge"],
+  "mode": "canvas_grid",
+  "challenge_text_sel": "#prompt-question, .prompt-text",
+  "canvas_sel": "canvas",
+  "submit_sel": ".button-submit",
+  "rows": 3,
+  "cols": 3,
+  "grid_top_frac": 0.30,
+  "grid_bottom_frac": 0.036,
+  "grid_left_frac": 0.164,
+  "grid_right_frac": 0.164,
+  "answer_format": "PICK_LIST",
+  "max_rounds": 8,
+  "deadline": 55,
+  "settle_ms": 1200,
+  "success_gone_frame": true,
+  "prompt": "You are an accessibility helper reading an hCaptcha image challenge. The image is overlaid with a red grid; each cell is labeled #0,#1,#2,... in reading order (left-to-right, top-to-bottom). The strip above the grid shows the example/target the task refers to. Task: \"{instruction}\". Look at every cell and decide which one(s) satisfy the task. If the task asks to choose ONE card (e.g. the card showing a different/unique/odd item), pick exactly one. Reason briefly, then on the VERY LAST line output BOTH: first PICK=[a,b,c] (JSON list of all matching cell numbers; PICK=[] if none), then ANSWER=<number> (the single best cell). Example last line: PICK=[1] ANSWER=1"
+}

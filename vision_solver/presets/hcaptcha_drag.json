@@ -1,0 +1,13 @@
+{
+  "name": "hcaptcha_drag",
+  "frame_match": ["frame=challenge"],
+  "mode": "canvas_drag",
+  "challenge_text_sel": "#prompt-question, .prompt-text",
+  "canvas_sel": "canvas",
+  "submit_sel": ".button-submit",
+  "max_rounds": 6,
+  "deadline": 55,
+  "settle_ms": 1200,
+  "success_gone_frame": true,
+  "prompt": "You are an accessibility helper solving an hCaptcha drag-and-drop puzzle rendered on a canvas. There is a movable piece (e.g. a shape, icon, or puzzle slider) and a target slot/location it must be placed into. Task: \"{instruction}\". Identify the center of the movable piece to grab, and the center of the target location to drop it. Give coordinates as fractions 0..1 of the image (x from left, y from top). Reason briefly, then output the VERY LAST line EXACTLY as: FROM=(x,y) TO=(x,y) e.g. FROM=(0.20,0.55) TO=(0.78,0.40)."
+}

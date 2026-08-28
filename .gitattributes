@@ -1,0 +1,5 @@
+# Windows 批处理必须 CRLF，否则 cmd.exe 解析报错
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+# shell 脚本用 LF
+*.sh text eol=lf
