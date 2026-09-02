@@ -33,7 +33,7 @@ import zipfile
 import uuid
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 # 启动前由系统显式提供的变量始终优先于 WebUI 保存的 .env。
@@ -2378,6 +2378,101 @@ async def api_mailpool_import(request: Request):
             "bad_samples": bad_samples, "total": total}
 
 
+# ---------------------------------------------------------------- 邮箱池管理(列表/删除/导出/单条)
+def _mailpool_records():
+    """读取 emails.txt 全部记录(保留原始顺序与行格式)。"""
+    recs = []
+    if os.path.isfile(EMAILS_FILE):
+        for line in open(EMAILS_FILE, encoding="utf-8"):
+            raw = line.rstrip("\n").rstrip("\r")
+            if not raw.strip() or raw.startswith("#"):
+                continue
+            parts = raw.split("----")
+            email = parts[0].strip().lower() if parts else ""
+            recs.append({
+                "email": email,
+                "has_password": len(parts) > 1 and bool(parts[1].strip()),
+                "has_rt": len(parts) > 2 and bool(parts[2].strip()),
+                "has_client": len(parts) > 3 and bool(parts[3].strip()),
+            })
+    return recs
+
+
+@app.get("/api/mailpool/list")
+def api_mailpool_list(offset: int = 0, limit: int = 200):
+    """分页返回邮箱池列表。limit<=0 返回全部。"""
+    recs = _mailpool_records()
+    total = len(recs)
+    if limit > 0:
+        recs = recs[offset:offset + limit]
+    return {"total": total, "emails": recs, "offset": offset, "limit": limit}
+
+
+@app.post("/api/mailpool/delete")
+async def api_mailpool_delete(request: Request):
+    """按邮箱地址删除一条或多条(逗号分隔或数组)。"""
+    data = await request.json() or {}
+    targets = data.get("emails") or []
+    if isinstance(targets, str):
+        targets = [e.strip() for e in targets.replace("，", ",").split(",") if e.strip()]
+    targets = {str(t).strip().lower() for t in targets}
+    if not targets:
+        return {"ok": False, "msg": "未指定要删除的邮箱"}
+    if not os.path.isfile(EMAILS_FILE):
+        return {"ok": False, "msg": "邮箱池为空"}
+    kept, removed = [], 0
+    with open(EMAILS_FILE, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    for raw in lines:
+        email = raw.split("----")[0].strip().lower() if raw.strip() and not raw.startswith("#") else ""
+        if email and email in targets:
+            removed += 1
+            continue
+        kept.append(raw)
+    with open(EMAILS_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(kept))
+        if kept:
+            f.write("\n")
+    return {"ok": True, "removed": removed, "total": len(_existing_emails())}
+
+
+@app.post("/api/mailpool/single")
+async def api_mailpool_single(request: Request):
+    """手动单条添加邮箱：email----password[----rt[----client_id]]。"""
+    data = await request.json() or {}
+    email = str((data or {}).get("email") or "").strip()
+    password = str((data or {}).get("password") or "").strip()
+    rt = str((data or {}).get("refresh_token") or "").strip()
+    client = str((data or {}).get("client_id") or "").strip()
+    if not email or not _EMAIL_RE.match(email):
+        return {"ok": False, "msg": "邮箱格式不正确"}
+    if not password and not rt:
+        return {"ok": False, "msg": "至少要填密码或 refresh_token 一项"}
+    norm = "----".join([email.lower(), password, rt, client])
+    parsed = _parse_mail_line(norm)
+    if not parsed:
+        return {"ok": False, "msg": "无法解析为邮箱记录"}
+    canon = "----".join(parsed)
+    existing = _existing_emails()
+    if canon.split("----")[0].lower() in existing:
+        return {"ok": False, "msg": "该邮箱已在池中"}
+    with open(EMAILS_FILE, "a", encoding="utf-8") as f:
+        if os.path.getsize(EMAILS_FILE) > 0:
+            f.write("\n")
+        f.write(canon + "\n")
+    return {"ok": True, "total": len(_existing_emails())}
+
+
+@app.get("/api/mailpool/export")
+def api_mailpool_export():
+    """导出整个邮箱池为 txt 下载。"""
+    if not os.path.isfile(EMAILS_FILE):
+        return PlainTextResponse("", media_type="text/plain")
+    raw = open(EMAILS_FILE, encoding="utf-8").read()
+    return PlainTextResponse(raw, media_type="text/plain",
+                             headers={"Content-Disposition": 'attachment; filename="emails.txt"'})
+
+
 # ============================================================ sms-man 接码助手
 def _gmail_service_default():
     return _read_config_val("SMSMAN_APP_ID_GMAIL", "") or "google"
@@ -3263,6 +3358,15 @@ async def api_run(request: Request):
         return JSONResponse({"error": f"未知脚本: {sid}"}, status_code=400)
     task_env = _child_env(script.get("platform", ""))
     task_env["REG_FACTORY_RUN_ID"] = f"webui-{uuid.uuid4().hex}"
+    # Outlook 邮箱注册：验证方式跟随「A 服务配置 → 验证服务」。
+    # A 服务验证服务里 manual 人工打码启用且默认 → 微软人机验证保留窗口人工完成；
+    # 其它 → 本地自动按压。子进程显式带 OUTLOOK_MANUAL_VERIFY 时以任务参数为准。
+    if sid == "outlook_reg_loop" and not task_env.get("OUTLOOK_MANUAL_VERIFY"):
+        try:
+            from .aar_bridge import outlook_verify_mode_from_aar
+            task_env.update(await asyncio.to_thread(outlook_verify_mode_from_aar))
+        except Exception:
+            pass
     try:
         from common import proxy_switch
         await asyncio.to_thread(proxy_switch.ensure_proxy_mode, task_env)

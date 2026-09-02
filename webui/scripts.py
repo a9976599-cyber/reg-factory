@@ -368,6 +368,7 @@ SCRIPTS = [
         "category": "邮箱注册",
         "title": "Outlook 邮箱注册",
         "desc": "持续自注册 Outlook；最近窗口成功率低于阈值时自动停止，避免持续消耗住宅流量。",
+        "verification_note": "人机验证方式跟随「A 服务配置 → 验证服务」：验证服务默认 provider 为「人工打码」时，微软按住验证保留窗口人工完成；为「本地验证码求解器」或其它时走本地自动按压。",
         "warning": "Outlook 浏览器注册、Graph 授权和账号恢复均使用当前选择的 Chromium provider；推荐 BitBrowser。",
         "args": [
             {"flag": "--count", "type": "int", "default": 0,
@@ -684,10 +685,13 @@ ENV_SCHEMA = [
         {"key": "SMSMAN_COUNTRY_ID_OPENAI", "default": "0", "help": "国家 id(0=随机/按价格)"},
         {"key": "CUSTOM_SMS_ALLOWED_HOSTS", "help": "自定义接码记录域名白名单；仅对明确添加的 host 放宽 DNS 公网校验"},
     ]},
-    {"group": "打码平台(可选)", "items": [
-        {"key": "CAPSOLVER_API_KEY", "secret": True, "help": "CapSolver 打码 key"},
-        {"key": "EZCAPTCHA_API_KEY", "secret": True, "help": "EZ-Captcha 打码 key(解锁 Outlook 用)"},
-        {"key": "YESCAPTCHA_API_KEY", "secret": True, "help": "YesCaptcha key (Claude hCaptcha / Grok Turnstile / GitHub Arkose)"},
+    {"group": "打码平台(可选)",
+     "notice": "这里填的打码 key 是唯一入口：A 服务配置 → 验证服务会自动读取并共用，无需在两边重复填。A 服务验证服务里的 CapSolver / EZCaptcha / YesCaptcha 在 key 留空时即走这里的配置；若在验证服务页单独填了 key，则以那里的为准。",
+     "notice_level": "info",
+     "items": [
+        {"key": "CAPSOLVER_API_KEY", "secret": True, "help": "CapSolver 打码 key（A 服务验证服务 CapSolver 自动共用）"},
+        {"key": "EZCAPTCHA_API_KEY", "secret": True, "help": "EZ-Captcha 打码 key（A 服务验证服务 EZCaptcha 自动共用）"},
+        {"key": "YESCAPTCHA_API_KEY", "secret": True, "help": "YesCaptcha key（A 服务验证服务 YesCaptcha 自动共用）"},
     ]},
     {"group": "Outlook 自注册",
      "notice": "需要提取 Graph RT 时，必须配置可接收验证码的辅助邮箱。请选择 YYDS/custom，或选择 outlook 并填入下方四段凭据；未配置时 Microsoft 安全信息页无法完成授权。",
@@ -711,6 +715,10 @@ ENV_SCHEMA = [
          "help": "provider=outlook 时必填：email@outlook.com----password----refresh_token----client_id。保存前可点本组验证按钮检查 Graph API。"},
         {"key": "OUTLOOK_GRAPH_RECOVERY_TIMEOUT", "default": "120", "help": "Graph 辅助邮箱验证码最大等待秒数"},
         {"key": "OUTLOOK_GRAPH_RECOVERY_POLL_INTERVAL", "default": "5", "help": "Graph 辅助邮箱轮询间隔秒数"},
+        {"key": "OUTLOOK_MANUAL_VERIFY", "type": "bool", "default": "false",
+         "help": "自动按压满后不放弃，保留 BitBrowser 窗口由你在窗口内手动完成微软验证，脚本检测到通过后自动继续（人工参与，非自动绕过）"},
+        {"key": "OUTLOOK_MANUAL_VERIFY_TIMEOUT", "default": "300",
+         "help": "人工验证最长等待秒数；超时仍由你手动完成后脚本才会继续"},
     ]},
     {"group": "ChatGPT 邮箱", "items": [
         {"key": "CHATGPT_EMAIL_PROVIDER", "type": "choice", "choices": ["pool", "icloud", "remail"],
@@ -955,6 +963,8 @@ _ENV_LABELS = {
     "OUTLOOK_GRAPH_RECOVERY_OUTLOOK_MAILBOX": "自有 Outlook 辅助邮箱",
     "OUTLOOK_GRAPH_RECOVERY_TIMEOUT": "辅助邮箱收码超时",
     "OUTLOOK_GRAPH_RECOVERY_POLL_INTERVAL": "辅助邮箱轮询间隔",
+    "OUTLOOK_MANUAL_VERIFY": "Outlook 人工验证模式(保留窗口手动完成)",
+    "OUTLOOK_MANUAL_VERIFY_TIMEOUT": "Outlook 人工验证等待秒数",
     # ChatGPT and temporary mail
     "CHATGPT_VERIFICATION_CODE_TIMEOUT": "ChatGPT 验证码邮箱等待时间",
     "CHATGPT_VERIFICATION_POLL_INTERVAL": "ChatGPT 验证码轮询间隔",

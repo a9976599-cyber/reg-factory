@@ -29,3 +29,11 @@ screenshots_outlook/
 # 已下线
 codex_k12/
 .github/workflows/
+
+# 运行时数据
+runtime/
+.reg-factory-data/
+server*.log
+
+# 发布脚本
+scripts/publish-release.ps1

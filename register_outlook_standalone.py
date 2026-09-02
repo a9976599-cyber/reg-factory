@@ -2072,6 +2072,42 @@ async def _maybe_confirm_before_register(page, tag, captcha_early_abort=False):
     return
 
 
+def _manual_verify_timeout_s():
+    raw = os.environ.get("OUTLOOK_MANUAL_VERIFY_TIMEOUT", "300").strip()
+    try:
+        return max(30, int(raw))
+    except (TypeError, ValueError):
+        return 300
+
+
+async def _wait_for_human_captcha(page, tag, idx, timeout_s, captcha_visible):
+    """Wait for a human to complete Microsoft's challenge in the visible window.
+
+    This does NOT solve or bypass anything — the operator completes the
+    challenge themselves in the live BitBrowser window. We only detect when the
+    challenge has disappeared and let the outer loop continue. Bound the wait so
+    an idle run does not hang forever.
+    """
+    deadline = time.time() + timeout_s
+    check_every = 5
+    try:
+        while time.time() < deadline:
+            if not await captcha_visible():
+                await asyncio.sleep(4)  # 防误判：确认验证确已消失
+                if not await captcha_visible():
+                    print(f"  {tag} 人工验证完成，验证码已消失，继续注册流程…")
+                    return True
+            await _safe_screenshot(
+                page, f"{SCREENSHOT_DIR}/outlook_{idx}_manual_wait.png"
+            )
+            await asyncio.sleep(check_every)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        print(f"  {tag} 人工验证等待异常: {e}")
+    return False
+
+
 async def register_outlook(page, context, idx=0, captcha_early_abort=False):
     """
     Register a new Outlook email account.
@@ -2083,6 +2119,11 @@ async def register_outlook(page, context, idx=0, captcha_early_abort=False):
     """
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     tag = f"[#{idx}]"
+
+    # 每次注册开始都重置保留标记，避免上一次人工验证/拦截残留导致后续
+    # profile 全部不删（窗口泄漏）。人工验证真正进入时下方会重新置 True。
+    global MANUAL_VERIFY_RETAIN_WINDOW
+    MANUAL_VERIFY_RETAIN_WINDOW = False
 
     try:
         print(f"  {tag} navigating to signup page...")
@@ -2766,6 +2807,33 @@ async def register_outlook(page, context, idx=0, captcha_early_abort=False):
                 # 仍能看到 captcha = 没过；给 8 轮(~24s)缓冲后快速放弃
                 if await _captcha_visible():
                     if wait_round - arkose_wait_start >= 8:
+                        # Manual-verification mode: instead of abandoning and
+                        # closing the window, keep it open and let the human
+                        # finish Microsoft's own challenge in the live browser.
+                        manual_wait = _env_truthy("OUTLOOK_MANUAL_VERIFY")
+                        if manual_wait:
+                            MANUAL_VERIFY_RETAIN_WINDOW = True
+                            print(
+                                f"  {tag} 自动按压已满；已开启人工验证模式。请在 BitBrowser 窗口完成验证，"
+                                f"脚本将检测到通过后继续（{_manual_verify_timeout_s()}s 内）。",
+                                flush=True,
+                            )
+                            manual_result = await _wait_for_human_captcha(
+                                page, tag, idx,
+                                timeout_s=_manual_verify_timeout_s(),
+                                captcha_visible=_captcha_visible,
+                            )
+                            if manual_result:
+                                arkose_solved = True
+                                had_captcha = False
+                                registration_confirmed = True
+                                # 人工通过：交回循环顶部走 post-captcha 收尾
+                                break
+                            print(f"  {tag} 人工验证等待超时，放弃本号")
+                            await _safe_screenshot(
+                                page, f"{SCREENSHOT_DIR}/outlook_{idx}_press_fail.png"
+                            )
+                            return None, None
                         print(f"  {tag} 按满仍未通过，快速放弃本号")
                         await _safe_screenshot(
                             page, f"{SCREENSHOT_DIR}/outlook_{idx}_press_fail.png"
@@ -3280,12 +3348,18 @@ async def _register_one_headless(idx, proxy_str):
 
 # ======================== Browser Mode (BitBrowser, full GUI) ========================
 
+# 人工验证模式接管时置位：即使本号未注册成功，也在 finally 保留窗口供查看。
+MANUAL_VERIFY_RETAIN_WINDOW = False
+
+
 async def _register_one_browser(bb, idx, proxy_str, keep_profile=False):
     """
     Register via BitBrowser full browser (highest traffic, most reliable).
     Returns (email, password) or (email, password, profile_id, ws) when
     keep_profile=True.
     """
+    global MANUAL_VERIFY_RETAIN_WINDOW
+    MANUAL_VERIFY_RETAIN_WINDOW = False
     tag = f"[#{idx}][browser]"
     profile_id = None
     ws = ""
@@ -3350,6 +3424,12 @@ async def _register_one_browser(bb, idx, proxy_str, keep_profile=False):
         print(f"  {tag} error: {e}")
         return _result(None, None)
     finally:
+        if profile_id and MANUAL_VERIFY_RETAIN_WINDOW:
+            print(
+                f"  {tag} 人工验证模式已保留 BitBrowser 窗口 {profile_id} 供查看；"
+                "完成后可手动关闭，或设置 OUTLOOK_MANUAL_VERIFY=false 恢复自动清理。"
+            )
+            return _result(None, None, profile_id, ws)
         if profile_id:
             try:
                 bb.close_browser(profile_id)

@@ -1449,6 +1449,12 @@ function renderForm(s){
     warning.textContent = s.warning;
     p.appendChild(warning);
   }
+  if(s.verification_note){
+    const note = document.createElement('div');
+    note.className = 'form-note';
+    note.textContent = s.verification_note;
+    p.appendChild(note);
+  }
 
   const primaryArgs = s.args.slice(0, 6);
   const advancedArgs = s.args.slice(6);
@@ -2314,9 +2320,105 @@ document.addEventListener('keydown', event=>{
 async function loadMailpool(){
   try{
     const d = await (await fetch('/api/mailpool')).json();
-    $('#mailpool-total').textContent = `当前池中 ${d.total} 个邮箱`;
+    $('#mailpool-total').textContent = `池中共 ${d.total} 个邮箱`;
+    $('#mp-list-total').textContent = d.total ? `共 ${d.total} 个` : '';
   }catch(e){}
+  loadMailpoolList();
 }
+
+// ---- 邮箱池列表：分页读取 + 渲染
+let MP_PAGE = 0;
+const MP_PAGE_SIZE = 50;
+let MP_SELECTED = new Set();
+async function loadMailpoolList(){
+  const tbody = $('#mp-rows');
+  if(!tbody) return;
+  try{
+    const r = await (await fetch(`/api/mailpool/list?offset=${MP_PAGE*MP_PAGE_SIZE}&limit=${MP_PAGE_SIZE}`)).json();
+    const rows = r.emails||[];
+    const all = $('#mp-check-all');
+    if(all) all.checked = rows.length>0 && rows.every(x=>MP_SELECTED.has(x.email));
+    $('#mp-empty').style.display = rows.length ? 'none' : 'block';
+    tbody.innerHTML = rows.map(x=>`
+      <tr data-email="${esc(x.email)}">
+        <td><input type="checkbox" class="mp-row-check" data-email="${esc(x.email)}" ${MP_SELECTED.has(x.email)?'checked':''}></td>
+        <td class="mono">${esc(x.email)}</td>
+        <td>${x.has_password?'<span class="badge ok">有</span>':'<span class="badge">无</span>'}</td>
+        <td>${x.has_rt?'<span class="badge ok">有</span>':'<span class="badge">无</span>'}</td>
+        <td>${x.has_client?'<span class="badge ok">有</span>':'<span class="badge">无</span>'}</td>
+        <td><button class="btn-inline" style="color:#f87171" onclick="mpDeleteOne('${esc(x.email)}')">删除</button></td>
+      </tr>`).join('');
+    const total = r.total||0;
+    const pages = Math.max(1, Math.ceil(total/MP_PAGE_SIZE));
+    const pager = $('#mp-pager');
+    if(pager) pager.innerHTML = total>MP_PAGE_SIZE ? `
+      <button class="btn-inline" ${MP_PAGE<=0?'disabled':''} onclick="MP_PAGE--;loadMailpoolList()">‹ 上一页</button>
+      <span class="src">${MP_PAGE+1} / ${pages}（共 ${total}）</span>
+      <button class="btn-inline" ${MP_PAGE>=pages-1?'disabled':''} onclick="MP_PAGE++;loadMailpoolList()">下一页 ›</button>` : '';
+  }catch(e){ tbody.innerHTML='<tr><td colspan="6" style="color:#f87171">加载失败: '+esc(e.message)+'</td></tr>'; }
+}
+function mpSyncAll(){
+  const all = $('#mp-check-all');
+  if(all) all.checked = $$('#mp-rows .mp-row-check').length>0 && $$('#mp-rows .mp-row-check').every(c=>c.checked);
+  $('#mp-list-total') && ($('#mp-list-total').textContent = $('#mp-rows')?.dataset? '' : '');
+}
+window.mpDeleteOne = async email=>{
+  if(!confirm(`确认从邮箱池删除 ${email}？`)) return;
+  const r = await (await fetch('/api/mailpool/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({emails:[email]})})).json();
+  MP_SELECTED.delete(email);
+  loadMailpool();
+};
+$('#btn-mp-del-selected') && ($('#btn-mp-del-selected').onclick = async ()=>{
+  if(!MP_SELECTED.size){ alert('请先勾选要删除的邮箱'); return; }
+  if(!confirm(`确认删除选中的 ${MP_SELECTED.size} 个邮箱？`)) return;
+  const r = await (await fetch('/api/mailpool/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({emails:[...MP_SELECTED]})})).json();
+  MP_SELECTED.clear(); loadMailpool();
+});
+$('#btn-mailpool-reload') && ($('#btn-mailpool-reload').onclick = ()=>{ MP_PAGE=0; loadMailpool(); });
+$('#btn-mp-add') && ($('#btn-mp-add').onclick = async ()=>{
+  const email=$('#mp-email').value.trim(), password=$('#mp-password').value,
+        rt=$('#mp-rt').value, client=$('#mp-client').value;
+  const msg=$('#mailpool-msg');
+  if(!email){ msg.textContent='请填写邮箱'; return; }
+  const btn=$('#btn-mp-add'); const o=btn.textContent; btn.disabled=true; btn.textContent='添加中…';
+  try{
+    const r = await (await fetch('/api/mailpool/single',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email,password,refresh_token:rt,client_id:client})})).json();
+    msg.textContent = r.ok ? '✓ 已添加' : '✗ '+(r.msg||'添加失败');
+    if(r.ok){
+      $('#mp-email').value=''; $('#mp-password').value=''; $('#mp-rt').value=''; $('#mp-client').value='';
+      $('#mailpool-total').textContent = `池中共 ${r.total} 个邮箱`;
+      loadMailpoolList();
+    }
+  }catch(e){ msg.textContent='添加失败: '+e; }
+  finally{ btn.disabled=false; btn.textContent=o; }
+});
+$('#mp-check-all') && ($('#mp-check-all').onchange = e=>{
+  $$('#mp-rows .mp-row-check').forEach(c=>{ c.checked = e.target.checked; if(e.target.checked) MP_SELECTED.add(c.dataset.email); else MP_SELECTED.delete(c.dataset.email); });
+  mpSyncAll();
+});
+document.addEventListener('change', e=>{
+  if(e.target && e.target.classList && e.target.classList.contains('mp-row-check')){
+    if(e.target.checked) MP_SELECTED.add(e.target.dataset.email); else MP_SELECTED.delete(e.target.dataset.email);
+  }
+});
+// 文件上传导入（支持 txt，多行）
+$('#btn-mailpool-upload') && ($('#btn-mailpool-upload').onclick = ()=>$('#mailpool-file').click());
+$('#mailpool-file') && ($('#mailpool-file').onchange = async e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const text = await file.text();
+  const msg=$('#mailpool-msg');
+  try{
+    const r = await (await fetch('/api/mailpool',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text})})).json();
+    msg.textContent = r.ok ? `✓ 文件导入 ${r.added}，跳过 ${r.skipped}`+(r.bad?`，错误 ${r.bad}`:'') : '导入失败';
+    $('#mailpool-total').textContent = `池中共 ${r.total} 个邮箱`;
+    loadMailpoolList();
+  }catch(err){ msg.textContent='文件导入失败: '+err; }
+  e.target.value='';
+});
 
 $('#btn-import-mail').onclick = async ()=>{
   const text = $('#mailpool-input').value;
@@ -2332,12 +2434,14 @@ $('#btn-import-mail').onclick = async ()=>{
       m += `，池中共 ${r.total}`;
       msg.textContent = m;
       if(r.bad && r.bad_samples.length) msg.textContent += `（错误样例：${r.bad_samples[0]}…）`;
-      $('#mailpool-total').textContent = `当前池中 ${r.total} 个邮箱`;
+      $('#mailpool-total').textContent = `池中共 ${r.total} 个邮箱`;
       if(r.added) $('#mailpool-input').value='';
+      loadMailpoolList();
     }else{ msg.textContent='导入失败: '+(r.msg||''); }
   }catch(e){ msg.textContent='导入请求失败: '+e; }
   finally{ btn.disabled=false; btn.textContent=o; }
 };
+window.MP_PAGE = MP_PAGE; // 暴露给内联 onclick
 
 // ---------------------------------------------------------------- 启动
 scriptsReady = loadScripts();
@@ -2672,18 +2776,21 @@ async function initAarRegister(){
     const plat = $('#ar-platform').value;
     if(plat){
       const p = (await aarApi('/platforms')).find(x=>x.name===plat);
-      const idOpts = (p.supported_identity_mode_options||[]).map(o=>o.value);
+      // identity / executor 选项是 {value,label} 对象：用中文 label 显示，value 作为选中值。
+      const idOpts = (p.supported_identity_mode_options||[]);
       const exOpts = p.supported_executor_options||[];
-      $('#ar-identity-list').innerHTML = idOpts.map(v=>
-        `<button type="button" class="aar-option ${v===arIdentity?'active':''}" data-v="${esc(v)}"><strong>${STATUS_LABELS[v]||v}</strong></button>`
+      const idLabel = idOpts.find(o=>o.value===arIdentity);
+      const exLabel = exOpts.find(o=>o.value===arExecutor);
+      $('#ar-identity-list').innerHTML = idOpts.map(o=>
+        `<button type="button" class="aar-option ${o.value===arIdentity?'active':''}" data-v="${esc(o.value)}" title="${esc(o.value)}"><strong>${esc(o.label||o.value)}</strong></button>`
       ).join('') || '<div class="dash-empty">该平台未提供身份选项</div>';
-      $('#ar-executor-list').innerHTML = exOpts.map(v=>
-        `<button type="button" class="aar-option ${v===arExecutor?'active':''}" data-v="${esc(v)}"><strong>${v}</strong></button>`
+      $('#ar-executor-list').innerHTML = exOpts.map(o=>
+        `<button type="button" class="aar-option ${o.value===arExecutor?'active':''}" data-v="${esc(o.value)}" title="${esc(o.value)}"><strong>${esc(o.label||o.value)}</strong></button>`
       ).join('') || '<div class="dash-empty">该平台未提供执行方式</div>';
       $$('#ar-identity-list .aar-option').forEach(b=>b.onclick=()=>{ arIdentity=b.dataset.v; initAarRegister(); });
       $$('#ar-executor-list .aar-option').forEach(b=>b.onclick=()=>{ arExecutor=b.dataset.v; initAarRegister(); });
       $('#ar-chips').innerHTML =
-        `<span class="badge">平台: ${esc(plat)}</span><span class="badge">身份: ${esc(arIdentity||'默认')}</span><span class="badge">执行: ${esc(arExecutor||'默认')}</span><span class="badge">数量: ${$('#ar-count').value}</span>`;
+        `<span class="badge">平台: ${esc(plat)}</span><span class="badge">身份: ${esc(idLabel?idLabel.label:(arIdentity||'默认'))}</span><span class="badge">执行: ${esc(exLabel?exLabel.label:(arExecutor||'默认'))}</span><span class="badge">数量: ${$('#ar-count').value}</span>`;
     }
   }catch(e){ console.error('initAarRegister', e); }
 }

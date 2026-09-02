@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=">
 <title>auto free · 全能注册工作台</title>
-<link rel="stylesheet" href="/static/style.css?v=20260828-cyber3">
+<link rel="stylesheet" href="/static/style.css?v=20260903-mailpool">
 <style id="aar-skin-inline">
 /* ===== 赛博朋克动态风 v1 ===== */
 :root{
@@ -357,6 +357,20 @@ dialog,.contact-dialog,.plus-payment-dialog{
           <p class="dash-sub">账号资产与本地服务运行状态</p>
         </div>
         <button id="btn-dash-refresh" class="ghost">↻ 刷新</button>
+      </div>
+
+      <!-- 快捷入口：小店 / 中转站 -->
+      <div class="dash-quicklinks" id="dash-quicklinks">
+        <a class="quicklink quicklink-shop" href="https://pay.ldxp.cn/shop/21GXJL6S" target="_blank" rel="noopener">
+          <span class="quicklink-icon">🛒</span>
+          <span class="quicklink-body"><span class="quicklink-title">小店</span><span class="quicklink-desc">购买代理 / 接码 / 套餐</span></span>
+          <span class="quicklink-arrow">↗</span>
+        </a>
+        <a class="quicklink quicklink-relay" href="http://txi.bbroot.com" target="_blank" rel="noopener">
+          <span class="quicklink-icon">🔄</span>
+          <span class="quicklink-body"><span class="quicklink-title">中转站</span><span class="quicklink-desc">流量中转 / 转发服务</span></span>
+          <span class="quicklink-arrow">↗</span>
+        </a>
       </div>
 
       <div class="stat-grid" id="dash-stats">
@@ -917,6 +931,7 @@ dialog,.contact-dialog,.plus-payment-dialog{
       </div>
     </section>
 
+
     <!-- Existing ChatGPT Plus accounts -> Codex OAuth -> SUB2API -->
     <section id="view-plus" style="display:none">
       <div class="plus-import-panel">
@@ -1023,18 +1038,59 @@ dialog,.contact-dialog,.plus-payment-dialog{
 
     <!-- 邮箱池视图 -->
     <section id="view-mailpool" style="display:none">
-      <div class="panel">
-        <div class="env-head">
-          <h2>批量导入邮箱池</h2>
-          <span id="mailpool-total" class="env-msg"></span>
+      <div class="mailpool-wrap">
+        <div class="panel">
+          <div class="env-head">
+            <h2>邮箱池管理</h2>
+            <div class="mailpool-tools">
+              <span id="mailpool-total" class="env-msg" style="margin:0 8px 0 0"></span>
+              <input type="file" id="mailpool-file" accept=".txt,.csv" style="display:none">
+              <button id="btn-mailpool-upload" class="ghost">⬆ 上传导入</button>
+              <a id="btn-mailpool-download" class="ghost" href="/api/mailpool/export" download="emails.txt">⬇ 导出下载</a>
+              <button id="btn-mailpool-reload" class="ghost">↻ 刷新</button>
+            </div>
+          </div>
+          <p class="hint">格式：<code>邮箱----密码----refresh_token----client_id</code>，也兼容 client_id/RT 反序、JSON、逗号/制表符/竖线/分号及简单 <code>邮箱:密码</code>。重复邮箱自动跳过；纯 Cookie/token 不入池。</p>
+          <div id="mailpool-msg" class="env-msg"></div>
         </div>
-        <p class="hint">外部邮箱直接入池，每行一个。支持 Outlook / Hotmail / Live / MSN 各地域域名、iCloud / me.com / mac.com 和自定义邮箱。<br>
-          格式：<code>邮箱----密码----refresh_token----client_id</code>，也兼容 client_id/RT 反序、JSON 对象、逗号、制表符、竖线、分号及简单邮箱:密码。纯 Cookie 或 token 不会写入邮箱池；重复邮箱自动跳过。</p>
-        <textarea id="mailpool-input" class="mailpool-input" spellcheck="false"
-          placeholder="aaa@outlook.com----Pass123----M.C5xx...----9e5f94bc-...&#10;bbb@outlook.com----Pass456"></textarea>
-        <div>
-          <button id="btn-import-mail" class="btn-run">导入到邮箱池</button>
-          <span id="mailpool-msg" class="env-msg"></span>
+
+        <!-- 手动自定义添加 -->
+        <div class="panel">
+          <div class="panel-head"><h3>手动添加邮箱</h3></div>
+          <div class="mailpool-add-grid">
+            <label class="asset-field"><span>邮箱 *</span><input id="mp-email" type="text" placeholder="you@outlook.com" autocomplete="off" spellcheck="false"></label>
+            <label class="asset-field"><span>密码</span><input id="mp-password" type="password" placeholder="密码(可留空，需配 RT)" autocomplete="off"></label>
+            <label class="asset-field"><span>refresh_token</span><input id="mp-rt" type="password" placeholder="M.C5xx...(可选)" autocomplete="off"></label>
+            <label class="asset-field"><span>client_id</span><input id="mp-client" type="text" placeholder="9e5f94bc-...(可选)" autocomplete="off"></label>
+            <button id="btn-mp-add" class="btn-run">＋ 添加</button>
+          </div>
+        </div>
+
+        <!-- 批量导入 -->
+        <div class="panel">
+          <div class="panel-head"><h3>批量导入</h3><span class="src">粘贴多行，每行一个</span></div>
+          <textarea id="mailpool-input" class="mailpool-input" spellcheck="false"
+            placeholder="aaa@outlook.com----Pass123----M.C5xx...----9e5f94bc-...&#10;bbb@outlook.com----Pass456"></textarea>
+          <div style="margin-top:10px"><button id="btn-import-mail" class="btn-run">导入到邮箱池</button></div>
+        </div>
+
+        <!-- 邮箱列表 -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3>池内邮箱</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="src" id="mp-list-total"></span>
+              <button id="btn-mp-del-selected" class="btn-inline" style="color:#f87171">删除选中</button>
+            </div>
+          </div>
+          <div class="mailpool-table-wrap">
+            <table class="asset-scan-table">
+              <thead><tr><th style="width:28px"><input type="checkbox" id="mp-check-all"></th><th>邮箱</th><th>密码</th><th>RT</th><th>Client ID</th><th style="width:60px"></th></tr></thead>
+              <tbody id="mp-rows"></tbody>
+            </table>
+            <div id="mp-empty" class="asset-scan-empty">池内还没有邮箱。用上方「手动添加」或「批量导入」入池。</div>
+            <div id="mp-pager" class="mailpool-pager"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -1352,11 +1408,11 @@ dialog,.contact-dialog,.plus-payment-dialog{
             </div>
           </div>
           <div class="panel" style="margin-bottom:16px">
-            <div class="panel-head"><h3>Step 1 · 注册身份</h3></div>
+            <div class="panel-head"><h3>第一步 · 注册身份</h3></div>
             <div class="aar-option-list" id="ar-identity-list"></div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h3>Step 2 · 执行通道</h3></div>
+            <div class="panel-head"><h3>第二步 · 执行通道</h3></div>
             <div class="aar-option-list" id="ar-executor-list"></div>
           </div>
         </div>
@@ -1387,6 +1443,34 @@ dialog,.contact-dialog,.plus-payment-dialog{
         <div><h1 class="dash-title">代理资源</h1><p class="dash-sub">代理池管理与可用性检测</p></div>
         <button id="btn-ap-check" class="ghost">⟳ 检测全部</button>
       </div>
+
+      <!-- 静态代理池教程文档 -->
+      <details class="proxy-tutorial">
+        <summary><span>📖 静态代理池教程</span><span class="tutorial-toggle">展开 / 收起</span></summary>
+        <div class="proxy-tutorial-body">
+          <p class="tutorial-lead">静态代理池 = 固定代理列表，适合没有动态代理 API 时使用。任务取代理时<strong>优先用已配置的动态代理 Provider</strong>，没有才回退到这里的静态池。</p>
+          <div class="tutorial-grid">
+            <div class="tutorial-col">
+              <h4>① 格式</h4>
+              <p>每行一个，右侧「新增代理」框批量粘贴即可：</p>
+              <pre>http://user:pass@host:port
+http://1.2.3.4:8080          # 无需账密的代理
+socks5://user:pass@host:port</pre>
+              <p class="tutorial-note">可选填地区标签（US / SG…），注册时会按目标地区筛选可用代理。</p>
+            </div>
+            <div class="tutorial-col">
+              <h4>② 怎么被用到</h4>
+              <ul>
+                <li>任务发起时按<strong>成功率加权轮询</strong>取一个代理，成功率高的更容易被选中；</li>
+                <li>代理连续失败会被自动降低权重，反复失败自动禁用（状态栏可看）；</li>
+                <li>勾选了地区的代理只服务对应国家的注册；地区留空则不挑。</li>
+              </ul>
+              <h4>③ 检测</h4>
+              <p>顶部「⟳ 检测全部」批量测活，列表每条的“成功/失败”列实时累计，帮你看哪些代理已经被风控、该删掉换新。</p>
+            </div>
+          </div>
+        </div>
+      </details>
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-label">代理数</div><div class="stat-value" id="ap-total">0</div></div>
         <div class="stat-card"><div class="stat-label">启用</div><div class="stat-value" id="ap-active">0</div></div>
@@ -1536,7 +1620,7 @@ dialog,.contact-dialog,.plus-payment-dialog{
   </section>
 </div>
 
-<script src="/static/app.js?v=20260828-cyber3"></script>
+<script src="/static/app.js?v=20260903-cnsteps"></script>
 <script src="/static/oar_page.js?v=20260902-oar-restored"></script>
 </body>
 </html>

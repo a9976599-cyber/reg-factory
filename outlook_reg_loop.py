@@ -919,6 +919,17 @@ async def one_attempt(
             )
         return email, password, cookies, graph
     finally:
+        # 人工验证模式：standalone 设了 MANUAL_VERIFY_RETAIN_WINDOW 表示窗口要
+        # 留着给人操作/查看。此时不能删 profile——留着让用户手动关闭，
+        # 避免"验证时闪退"。
+        retain_window = bool(getattr(mod, "MANUAL_VERIFY_RETAIN_WINDOW", False))
+        if retain_window and profile_id:
+            log(
+                f"人工验证/查看模式：保留 BitBrowser 窗口 {profile_id} 不关闭。"
+                "请在浏览器里完成验证或查看原因，随后手动关闭该窗口。",
+                "WARN",
+            )
+            return email, password, cookies, graph
         if profile_id:
             try:
                 bb.close_browser(profile_id)

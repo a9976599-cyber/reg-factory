@@ -196,6 +196,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
   border-left:3px solid var(--amber);border-radius:6px;background:rgba(229,168,75,.08);
   color:#efcb91;font-size:12px;line-height:1.5
 }
+.form-note{
+  margin:14px 0 0;padding:9px 11px;border:1px solid rgba(88,166,255,.45);
+  border-left:3px solid var(--accent);border-radius:6px;background:rgba(88,166,255,.07);
+  color:#9cc4f5;font-size:12px;line-height:1.5
+}
 .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;margin-top:16px}
 .field{min-width:0;margin:0}
 .field>label{display:block;margin:0 0 5px;color:#d9dce1;font-size:11.5px;font-weight:600;overflow-wrap:anywhere}
@@ -341,6 +346,20 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
   font-family:var(--mono);font-size:11px;line-height:1.55
 }
 #view-mailpool code{padding:2px 5px;border-radius:4px;background:var(--surface-raised);font-size:11px;overflow-wrap:anywhere}
+/* 邮箱池管理界面 */
+#view-mailpool .mailpool-wrap{display:flex;flex-direction:column;gap:16px}
+.mailpool-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mailpool-tools .ghost{text-decoration:none;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.mailpool-add-grid{display:grid;grid-template-columns:1.2fr 1fr 1.4fr 1.2fr auto;gap:10px;align-items:end}
+@media(max-width:1100px){.mailpool-add-grid{grid-template-columns:1fr 1fr}}
+.mailpool-add-grid .asset-field{margin:0}
+.mailpool-add-grid .btn-run{height:36px;padding:0 16px;white-space:nowrap}
+.mailpool-table-wrap{max-height:520px;overflow:auto}
+.mailpool-pager{display:flex;align-items:center;justify-content:center;gap:14px;padding:12px 0 2px}
+.mailpool-pager .btn-inline:disabled{opacity:.4;cursor:default}
+.mailpool-pager .src{font-size:12px;color:var(--quiet)}
+.mailpool-table-wrap .asset-scan-table td.mono{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mailpool-table-wrap input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
 
 /* Local asset API */
 .asset-panel{max-width:1040px;margin:0 auto}
@@ -1071,6 +1090,50 @@ body.theme-deep{
 .dash-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
 .dash-title{margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em;color:#fff}
 .dash-sub{margin:4px 0 0;color:var(--muted,#9aa3b2);font-size:12.5px}
+/* 总览快捷入口（小店 / 中转站） */
+.dash-quicklinks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.quicklink{
+  display:flex;align-items:center;gap:12px;padding:14px 16px;text-decoration:none;
+  background:var(--surface,#14171f);border:1px solid rgba(120,150,255,.18);border-radius:14px;
+  transition:border-color .15s,transform .1s;position:relative;overflow:hidden;
+}
+.quicklink::before{content:'';position:absolute;inset:0 0 auto 0;height:3px;background:var(--ql-grad,#4f8cff);opacity:.9}
+.quicklink:hover{border-color:rgba(120,150,255,.5);transform:translateY(-1px)}
+.quicklink-shop{--ql-grad:linear-gradient(90deg,#ff7a59,#f43f5e)}
+.quicklink-relay{--ql-grad:linear-gradient(90deg,#38bdf8,#6366f1)}
+.quicklink-icon{font-size:22px;flex:0 0 auto}
+.quicklink-body{display:flex;flex-direction:column;gap:3px;min-width:0}
+.quicklink-title{font-size:15px;font-weight:700;color:#fff}
+.quicklink-desc{font-size:11.5px;color:var(--muted,#9aa3b2)}
+.quicklink-arrow{margin-left:auto;color:var(--muted,#9aa3b2);font-size:14px}
+@media(max-width:760px){.dash-quicklinks{grid-template-columns:1fr}}
+/* 静态代理池教程文档（A 代理池页顶部） */
+.proxy-tutorial{
+  margin:0 0 18px;border:1px solid rgba(120,150,255,.18);border-radius:14px;
+  background:var(--surface,#14171f);overflow:hidden
+}
+.proxy-tutorial summary{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;
+  padding:13px 16px;font-size:13.5px;font-weight:650;color:#fff;
+  user-select:none;list-style:none
+}
+.proxy-tutorial summary::-webkit-details-marker{display:none}
+.proxy-tutorial[open] summary{border-bottom:1px solid rgba(120,150,255,.15)}
+.tutorial-toggle{font-size:11px;font-weight:500;color:var(--muted,#9aa3b2)}
+.proxy-tutorial-body{padding:14px 16px 16px}
+.tutorial-lead{margin:0 0 12px;font-size:12.5px;line-height:1.6;color:var(--muted,#9aa3b2)}
+.tutorial-lead strong{color:#9ec1ff}
+.tutorial-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.tutorial-grid{grid-template-columns:1fr}}
+.tutorial-col h4{margin:0 0 8px;font-size:12.5px;font-weight:700;color:#fff}
+.tutorial-col p{margin:0 0 8px;font-size:12px;line-height:1.6;color:var(--muted,#9aa3b2)}
+.tutorial-col ul{margin:0 0 8px;padding-left:18px;font-size:12px;line-height:1.7;color:var(--muted,#9aa3b2)}
+.tutorial-col pre{
+  margin:0 0 8px;padding:10px 12px;border-radius:8px;background:rgba(0,0,0,.3);
+  border:1px solid rgba(120,150,255,.12);font-size:11.5px;line-height:1.6;
+  color:#a8d8ff;overflow-x:auto;white-space:pre
+}
+.tutorial-note{color:var(--quiet,#6b7280)!important;font-size:11px!important}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
 .stat-card{
   background:var(--surface,#14171f);border:1px solid rgba(120,150,255,.16);border-radius:16px;

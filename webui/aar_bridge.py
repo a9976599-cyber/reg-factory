@@ -69,6 +69,87 @@ def is_aar_alive() -> bool:
         return False
 
 
+# Any Auto Register 桌面程序的后端固定跑在本机 10086（Electron 壳加载它）。
+AAR_DESKTOP_PORT = int(os.getenv("AAR_DESKTOP_PORT", "10086"))
+AAR_DESKTOP_BASE_URL = f"http://127.0.0.1:{AAR_DESKTOP_PORT}"
+
+
+def is_aar_desktop_alive() -> bool:
+    """探测 Any Auto Register 桌面程序(10086)是否在运行。
+
+    用于 reg-factory「A 完整控制台」内嵌前判断目标是否可用。
+    """
+    try:
+        r = httpx.get(f"{AAR_DESKTOP_BASE_URL}/api/v1/health", timeout=2.0, trust_env=False)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Outlook 任务验证方式跟随「A 服务配置 → 验证服务」
+# ---------------------------------------------------------------------------
+# A 服务验证服务的 captcha provider（manual / local_solver / yescaptcha /
+# twocaptcha / capsolver / ezcaptcha）作为 Outlook 注册人机验证的统一开关：
+#   - manual（人工验证）启用且默认  → OUTLOOK_MANUAL_VERIFY=1（保留窗口真人操作）
+#   - 其它 / 未配置                 → 保持本地自动按压（SwiftShader 模拟）
+# 云端打码对微软 PerimeterX 按住验证解不出（原实现已移除），故不映射。
+_OUTLOOK_VERIFY_DEFAULTS = ("local_solver", "manual")
+
+
+def fetch_aar_captcha_settings() -> list[dict]:
+    """读 A 服务验证服务的 captcha 配置（AAR /api/provider-settings）。
+
+    失败或 AAR 不在线时返回 []，调用方走默认行为，不影响任务启动。
+    """
+    try:
+        if not is_aar_alive():
+            return []
+        client = httpx.Client(base_url=AAR_BASE_URL, timeout=5.0, trust_env=False)
+        try:
+            r = client.get("/api/provider-settings", params={"provider_type": "captcha"})
+            if r.status_code != 200:
+                return []
+            data = r.json()
+            return data if isinstance(data, list) else []
+        finally:
+            client.close()
+    except Exception:
+        return []
+
+
+def outlook_verify_mode_from_aar() -> dict:
+    """按 A 服务验证服务配置决定 Outlook 注册任务的验证方式。
+
+    返回要注入子进程的环境变量。规则：
+    - 验证服务里人工打码(manual)启用且为默认/唯一启用 → 人工验证窗口
+    - 否则 → 本地自动按压（SwiftShader），并允许 OUTLOOK_REG_MAX_PRESS 收窄
+    """
+    mode: dict = {}
+    try:
+        settings = fetch_aar_captcha_settings()
+        if not settings:
+            return mode
+        enabled = [s for s in settings if s.get("enabled")]
+        if not enabled:
+            return mode
+        default = next((s for s in enabled if s.get("is_default")), enabled[0])
+        provider_key = str(default.get("provider_key") or "")
+        # manual 人工打码 → 微软验证保留窗口人工完成
+        if provider_key == "manual":
+            mode["OUTLOOK_MANUAL_VERIFY"] = "1"
+            mode["OUTLOOK_MANUAL_VERIFY_TIMEOUT"] = str(
+                default.get("config", {}).get("manual_verify_timeout") or "300"
+            )
+            _log(f"outlook verify mode: manual (A 服务验证服务 manual)")
+        else:
+            mode.pop("OUTLOOK_MANUAL_VERIFY", None)
+            _log(f"outlook verify mode: local press (A 服务验证服务 {provider_key})")
+    except Exception as exc:  # noqa: BLE001
+        _log(f"outlook verify mode resolve failed: {exc}")
+    return mode
+
+
 def ensure_aar_running() -> bool:
     """确保 AAR 后端在跑；没跑就拉起（独立 venv、独立 SQLite）。"""
     global _proc
@@ -308,6 +389,15 @@ class BackgroundResp:
 
 
 
+
+
+@router.get("/api/aar-desktop-health")
+async def aar_desktop_health():
+    """同源探测：Any Auto Register 桌面程序(localhost:10086)是否在运行。
+
+    供前端「A 完整控制台」决定内嵌还是提示先开桌面程序。
+    """
+    return {"alive": is_aar_desktop_alive(), "url": AAR_DESKTOP_BASE_URL}
 
 
 @router.get("/aar")
