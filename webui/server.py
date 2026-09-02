@@ -1243,6 +1243,65 @@ def api_asset_cookie(
     )
 
 
+@app.get("/api/assets/mailbox-inventory")
+def api_asset_mailbox_inventory(request: Request):
+    """列出本机全部邮箱四段凭据(邮箱/密码/refresh_token/client_id)，无视是否已领取。
+
+    原生 /api/assets/emails 采用「一次性领取」语义，领过的邮箱会被移出
+    emails.txt 并进入 runtime/assets/exported，导致面板再也看不到密码。
+    本接口直接回扫所有本地来源，保证每一条密码都可见、可单独或批量导出。
+    """
+    denied = _asset_api_denied(request)
+    if denied:
+        return denied
+    from common import asset_store
+
+    data_root = asset_store._data_root()
+    results = []
+    seen = set()
+
+    def ingest(path, source_label, claimed):
+        if not os.path.isfile(path):
+            return
+        for line in open(path, encoding="utf-8", errors="replace"):
+            raw = line.strip()
+            if not raw or raw.startswith("#"):
+                continue
+            parts = raw.split("----")
+            if not parts or "@" not in (parts[0] or ""):
+                continue
+            email = parts[0].strip()
+            key = email.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            record = {
+                "email": email,
+                "email_provider": asset_store.classify_email_provider(email),
+                "password": parts[1].strip() if len(parts) > 1 else "",
+                "refresh_token": parts[2].strip() if len(parts) > 2 else "",
+                "client_id": parts[3].strip() if len(parts) > 3 else "",
+            }
+            results.append({
+                **record,
+                "claimed": asset_store._claim_id("outlook", asset_store._asset_identity(email, "")) in claimed,
+                "source": source_label,
+            })
+
+    claimed = asset_store._read_claims().get("outlook", set())
+    for fname in ("emails.txt", "outlook_no_graph.txt"):
+        path = os.path.join(str(data_root), fname)
+        if os.path.isfile(path):
+            ingest(path, fname, claimed)
+    # exported 目录：被领取移出的邮箱仍保留完整密码
+    exported_root = data_root / "runtime" / "assets" / "exported"
+    if exported_root.is_dir():
+        for file in sorted(exported_root.rglob("emails.txt")):
+            ingest(str(file), "exported/" + str(file.relative_to(exported_root)).replace("\\", "/"), claimed)
+
+    return JSONResponse({"count": len(results), "items": results})
+
+
 @app.post("/api/assets/cursors/reset")
 async def api_asset_cursor_reset(request: Request):
     denied = _asset_api_denied(request)
@@ -3333,3 +3392,14 @@ async def shutdown_local_services():
 _ensure_proxy_env()
 app.mount("/static", StaticFiles(directory=os.path.join(WEBUI, "static")), name="static")
 app.mount("/assets", StaticFiles(directory=os.path.join(ROOT, "assets")), name="assets")
+
+
+# ---- reg-factory × any-auto-register 融合桥（/aar 界面 + /aar-api /oar-api 转发） ----
+try:
+    from .aar_bridge import router as aar_router, ensure_aar_running  # noqa: E402
+
+    app.include_router(aar_router)
+    _aar_ready = ensure_aar_running()
+    print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
+except Exception as _aar_exc:  # 融合桥失败不影响主服务
+    print(f"[aar-bridge] disabled: {_aar_exc}", flush=True)
