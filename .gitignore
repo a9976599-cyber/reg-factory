@@ -37,3 +37,7 @@ server*.log
 
 # 发布脚本
 scripts/publish-release.ps1
+
+# local publish/build scratch
+scripts/publish-2.0.8.ps1
+build-*.log

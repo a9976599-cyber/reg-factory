@@ -44,6 +44,7 @@ datas.extend(playwright_datas)
 hiddenimports = playwright_hidden + [
     "webui.server",
     "webui.scripts",
+    "webui.aar_bridge",
     "run_full_flow",
     "register_three_platforms",
     "oauth_codex",
@@ -58,12 +59,18 @@ hiddenimports = playwright_hidden + [
     "unlock_outlook",
     "mailbox_broker",
     "register_outlook_standalone",
+    # 桌面窗口（内嵌浏览器，不打开外部浏览器）
+    "webview",
+    "pythonnet",
+    "clr_loader",
+    "proxy_tools",
+    "bottle",
 ]
 for package in ("common", "vision_solver", "xconsole_client"):
     hiddenimports.extend(collect_submodules(package))
 
 a = Analysis(
-    [str(ROOT / "scripts" / "reg-factory-server.py")],
+    [str(ROOT / "reg_factory_desktop.py")],
     pathex=[str(ROOT)],
     binaries=playwright_binaries,
     datas=datas,
@@ -71,7 +78,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["pytest", "tkinter"],
+    excludes=["pytest", "pywebview[qt]"],
     noarchive=False,
     optimize=0,
 )
@@ -87,7 +94,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
