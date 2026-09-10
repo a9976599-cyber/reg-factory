@@ -1,0 +1,49 @@
+name: CI
+
+# 目的很具体：挡住「源码和发布包悄悄分叉」这类回归 —— 新手指南入口被删、
+# 三个入口各自内联一份 --task 解析、.env.example 与界面 schema 漂移、JS 写坏。
+# 这些都是零依赖就能查出来的，跑得快、必须绿。
+#
+# 需要完整依赖的单元测试（fastapi / playwright / curl_cffi …）由
+# scripts/build_release.ps1 在打包前执行，那里本来就是完整环境。
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: 静态检查（零依赖）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 编译全部 Python 源码
+        run: python -m compileall -q .
+
+      - name: 检查 WebUI JavaScript 语法
+        run: node --check webui/static/app.js
+
+      - name: 静态不变量测试
+        working-directory: tests
+        env:
+          PYTHONPATH: ..
+        run: |
+          python -m unittest -v \
+            test_task_dispatch \
+            test_env_catalog \
+            test_webui_tour \
+            test_release_artifact_map
