@@ -27,17 +27,36 @@ except Exception:
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-CLASH_API = os.environ.get("CLASH_API", "http://127.0.0.1:9097")
-CLASH_SECRET = os.environ.get("CLASH_SECRET", "")
-CLASH_PROXY = os.environ.get("CLASH_PROXY", "http://127.0.0.1:7897")
-DEFAULT_GROUP = os.environ.get("CLASH_GROUP", "GLOBAL")
-DIRECT_PROXY = (
-    os.environ.get("REG_FACTORY_PROXY")
-    or os.environ.get("RESIDENTIAL_PROXY")
-    or os.environ.get("DIRECT_PROXY")
-    or ""
-).strip()
-NO_CLASH = os.environ.get("REG_FACTORY_NO_CLASH", "").strip().lower() in {"1", "true", "yes", "on"}
+def _clash_settings():
+    """从环境变量求值 Clash/出口代理相关常量。
+
+    抽成函数是为了支持热更新：WebUI 保存 .env 后由 ``refresh_from_env()``
+    再求值一次，而不是 reload 整个模块（reload 会让调用的旧引用失效）。
+    注：运行时代码优先走 ``_env(environ)`` 动态读取，这些模块级名字保留给
+    外部按属性访问的调用方。
+    """
+    return {
+        "CLASH_API": os.environ.get("CLASH_API", "http://127.0.0.1:9097"),
+        "CLASH_SECRET": os.environ.get("CLASH_SECRET", ""),
+        "CLASH_PROXY": os.environ.get("CLASH_PROXY", "http://127.0.0.1:7897"),
+        "DEFAULT_GROUP": os.environ.get("CLASH_GROUP", "GLOBAL"),
+        "DIRECT_PROXY": (
+            os.environ.get("REG_FACTORY_PROXY")
+            or os.environ.get("RESIDENTIAL_PROXY")
+            or os.environ.get("DIRECT_PROXY")
+            or ""
+        ).strip(),
+        "NO_CLASH": os.environ.get("REG_FACTORY_NO_CLASH", "").strip().lower()
+        in {"1", "true", "yes", "on"},
+    }
+
+
+globals().update(_clash_settings())
+
+
+def refresh_from_env():
+    """重新读取环境变量，刷新本模块缓存的出口代理常量。"""
+    globals().update(_clash_settings())
 
 _MODE_ALIASES = {
     "auto": "clash_auto",

@@ -15,6 +15,13 @@
 * 其它情况：把官方入口的 code object 原样 ``exec`` 进 ``__main__``，
   授权校验、内嵌后端、WebUI + webview 全部走官方原路径，不做任何改动。
 
+为什么这里有一份 ``task_dispatch`` 的副本
+----------------------------------------
+解析规则与 ``task_dispatch.py`` 必须一致，但本文件是被编译成 code object
+**注入官方冻结包**的，而官方包的 PYZ 里根本没有 ``task_dispatch`` 这个模块
+——补丁只替换 CArchive 中的入口一条，不会重建 PYZ。因此这里只能自带一份等价
+实现；两份实现的行为一致性由 ``tests/test_task_dispatch.py`` 断言锁定。
+
 注入方式
 --------
 ``__RF_ORIG_CODE__`` 是一个占位常量；构建时由 ``patch_exe.py`` 用官方入口的
@@ -48,26 +55,33 @@ def _rf_bundle_root():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def _rf_dispatch_task(raw_args):
-    """命中任务派发则执行并返回 True，否则返回 False 交给官方入口。"""
-    args = list(raw_args)
+def _rf_parse_task(raw_args):
+    """与 ``task_dispatch.parse_task`` 同形：返回 (target, rest) 或 None。
+
+    ``--task`` 后面没跟脚本名时返回 None（退回官方入口启动 WebUI），
+    不把它当成脚本名去报错。
+    """
+    args = list(raw_args or [])
     if args[:1] == ["-u"]:
         args = args[1:]
     if not args:
-        return False
-
+        return None
     head = args[0]
     if head == "--task":
-        target = args[1] if len(args) > 1 else ""
-        offset = 2
-    elif head.lower().endswith(".py"):
-        target = head
-        offset = 1
-    else:
-        return False
+        if len(args) < 2 or not args[1]:
+            return None
+        return args[1], args[2:]
+    if head.lower().endswith(".py"):
+        return head, args[1:]
+    return None
 
-    if not target:
-        raise SystemExit("--task requires a script name")
+
+def _rf_dispatch_task(raw_args):
+    """命中任务派发则执行并返回 True，否则返回 False 交给官方入口。"""
+    parsed = _rf_parse_task(raw_args)
+    if parsed is None:
+        return False
+    target, rest = parsed
 
     _rf_configure_live_output()
 
@@ -77,7 +91,7 @@ def _rf_dispatch_task(raw_args):
         raise SystemExit("task script not found: %s" % target_path)
 
     sys.path.insert(0, bundle_root)
-    sys.argv = [target_path] + args[offset:]
+    sys.argv = [target_path] + list(rest)
 
     import runpy
     runpy.run_path(target_path, run_name="__main__")

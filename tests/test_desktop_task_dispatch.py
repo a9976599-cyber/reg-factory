@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import task_dispatch
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "reg_factory_desktop.py"
@@ -20,9 +22,10 @@ SPEC.loader.exec_module(launcher)
 
 class DesktopEntryTaskDispatchTests(unittest.TestCase):
     def setUp(self):
-        # runpy is bound at module load via `import runpy`. Patch it on the launcher
-        # object, not sys.modules, otherwise the module-level import wins.
-        self._runpy_patch = patch.object(launcher.runpy, "run_path")
+        # run_path 现在由 task_dispatch.run_task 调用（桌面入口 / sh 入口 / 补丁
+        # 入口共用同一份解析与执行实现），所以补丁打在 task_dispatch 上，
+        # 而不是各入口自己的模块对象。
+        self._runpy_patch = patch.object(task_dispatch.runpy, "run_path")
         self.mock_runpy = self._runpy_patch.start()
         launcher._TASK_DISPATCH = False
 

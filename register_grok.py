@@ -30,6 +30,7 @@ from playwright.async_api import async_playwright
 
 import requests
 
+from common.async_batch import gather_settled
 from common.browser import (
     human_type,
     open_and_connect,
@@ -1583,7 +1584,8 @@ async def main():
                         print(f"  #{i} fatal: {e}")
                         results.append(None)
 
-    await asyncio.gather(*[run_one(i) for i in range(1, args.count + 1)])
+    # 单个账号的致命错误不应该让整批中断（run_one 已把失败记为 None）。
+    await gather_settled(run_one(i) for i in range(1, args.count + 1))
 
     ok = sum(1 for r in results if r)
     print(f"\n{'='*50}\n  success: {ok}/{len(results)}\n{'='*50}")

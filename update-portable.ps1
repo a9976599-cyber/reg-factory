@@ -10,6 +10,11 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+# 发布仓库（owner/repo）。更新器只认这里的 Release：指向上游会把本分支的修复
+# 静默覆盖回未修复版本，"点运行任务又开一个窗口"的老毛病会复发。
+# 改发布地址时**只改这一处**。
+$ReleaseRepo = "a9976599-cyber/reg-factory"
+
 $InstallDir = [System.IO.Path]::GetFullPath($InstallDir)
 $parentDir = Split-Path -Parent $InstallDir
 if ([string]::IsNullOrWhiteSpace($parentDir) -or $InstallDir -eq $parentDir) {
@@ -88,7 +93,7 @@ function Get-LatestRelease {
     $lastError = ""
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         try {
-            return Invoke-RestMethod -Uri "https://api.github.com/repos/tiantianGPU/reg-factory/releases/latest" -Headers @{ Accept = "application/vnd.github+json" } -TimeoutSec 30
+            return Invoke-RestMethod -Uri "https://api.github.com/repos/$ReleaseRepo/releases/latest" -Headers @{ Accept = "application/vnd.github+json" } -TimeoutSec 30
         } catch {
             $lastError = $_.Exception.Message
             if ($attempt -lt 3) { Start-Sleep -Seconds ($attempt * 2) }

@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import uuid
 
+import config as _config
 from config import (
     CLOAK_EXTRA_ARGS,
     CLOAK_FINGERPRINT_SEED,
@@ -22,6 +23,24 @@ from config import (
     CLOAK_TIMEZONE,
     CLOAK_USER_DATA_DIR,
 )
+
+# ``from config import X`` 拿的是值快照，WebUI 改配置后需要重新绑定。
+_CLOAK_CONFIG_KEYS = (
+    "CLOAK_EXTRA_ARGS",
+    "CLOAK_FINGERPRINT_SEED",
+    "CLOAK_GEOIP",
+    "CLOAK_HEADLESS",
+    "CLOAK_HUMANIZE",
+    "CLOAK_LICENSE_KEY",
+    "CLOAK_LOCALE",
+    "CLOAK_TIMEZONE",
+    "CLOAK_USER_DATA_DIR",
+)
+
+
+def refresh_from_env():
+    """把 config 的最新值重新绑定到本模块（见 common/env_refresh.py）。"""
+    globals().update({key: getattr(_config, key) for key in _CLOAK_CONFIG_KEYS})
 
 
 def _proxy_url(browser_options: dict | None = None) -> str | None:

@@ -20,20 +20,17 @@ import uvicorn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import task_dispatch  # noqa: E402 - 必须在 sys.path 调整之后导入
+
 _TASK_DISPATCH = False
 
 
 def _configure_live_output() -> None:
-    """Make frozen task output visible to the WebUI as each line is written."""
-    os.environ["PYTHONUNBUFFERED"] = "1"
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if not callable(reconfigure):
-            continue
-        try:
-            reconfigure(line_buffering=True, write_through=True)
-        except (OSError, ValueError):
-            pass
+    """Make frozen task output visible to the WebUI as each line is written.
+
+    实现收敛在 `task_dispatch.configure_live_output`，这里只是保留同名包装。
+    """
+    task_dispatch.configure_live_output()
 
 
 def _configure_frozen_runtime() -> None:
@@ -220,20 +217,11 @@ def main() -> None:
     _adopt_running_data_root()
     _configure_frozen_runtime()
     raw_args = list(sys.argv[1:])
-    if raw_args[:1] == ["-u"]:
-        raw_args = raw_args[1:]
-    if raw_args and (raw_args[0] == "--task" or raw_args[0].lower().endswith(".py")):
+    # 解析统一走 task_dispatch：`--task` 后面漏写脚本名时返回 None，
+    # 于是一路走到下面的 WebUI 启动分支，而不是把 "--task" 当脚本名报错。
+    if task_dispatch.parse_task(raw_args) is not None:
         _TASK_DISPATCH = True
-        _configure_live_output()
-        target = raw_args[1] if raw_args[0] == "--task" and len(raw_args) > 1 else raw_args[0]
-        root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
-        target_path = root / target
-        if not target_path.is_file():
-            raise SystemExit(f"task script not found: {target}")
-        sys.path.insert(0, str(root))
-        arg_offset = 2 if raw_args[0] == "--task" else 1
-        sys.argv = [str(target_path), *raw_args[arg_offset:]]
-        runpy.run_path(str(target_path), run_name="__main__")
+        task_dispatch.dispatch_task(raw_args)
         return
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")

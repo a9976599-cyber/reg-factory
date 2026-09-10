@@ -16,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from playwright.async_api import async_playwright
 
+from common.async_batch import gather_settled
 from common import oauth_codex as ox
 from common import proxy_switch
 from common.account_records import (
@@ -442,8 +443,16 @@ async def run(args):
                         await asyncio.to_thread(_write_output_token, output_path, result)
                 return result
 
-        results = await asyncio.gather(
-            *(worker(index, record) for index, record in enumerate(records, start=1))
+        # 单条记录导入失败不应该让整批中断：折算成一条 failed 结果参与汇总
+        # （该条不会写入 result_path/output_path —— 它本来就没有可用产物）。
+        results = await gather_settled(
+            (worker(index, record) for index, record in enumerate(records, start=1)),
+            on_error=lambda exc, index: {
+                "email": records[index].get("email", "") if isinstance(records[index], dict) else "",
+                "status": "failed",
+                "phone_status": "unknown",
+                "error": f"{type(exc).__name__}: {exc}",
+            },
         )
 
     success = sum(item["status"] == "success" for item in results)

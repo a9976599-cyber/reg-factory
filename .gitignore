@@ -26,9 +26,10 @@ tri_register_logs/
 screenshots/
 screenshots_outlook/
 
-# 已下线
+# 已下线（CI 工作流要保留）
 codex_k12/
-.github/workflows/
+.github/workflows/*
+!.github/workflows/ci.yml
 
 # 运行时数据
 runtime/

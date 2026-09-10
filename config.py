@@ -8,6 +8,7 @@ config.py — 全局配置。
 """
 
 import os
+import sys
 
 
 # ---------------------------------------------------------------- .env 加载
@@ -357,3 +358,17 @@ SMSMAN_TOKEN = _env("SMSMAN_TOKEN", "")  # sms-man.com API key（profile 页获�
 SMSMAN_APP_ID_OPENAI = _env("SMSMAN_APP_ID_OPENAI", "openai")  # 数字 application_id 或 code/名(自动解析)
 SMSMAN_COUNTRY_ID_OPENAI = _env("SMSMAN_COUNTRY_ID_OPENAI", "0")  # 0=随机国家
 SMSMAN_MAXPRICE_OPENAI = _env("SMSMAN_MAXPRICE_OPENAI", "")  # 价格上限（sms-man 币种），空=不限
+
+
+# ---------------------------------------------------------------- 热更新
+def refresh_from_env():
+    """重新求值本模块的环境派生常量（WebUI 保存 .env 后由 env_refresh 调用）。
+
+    这里就地 reload 自身：模块对象不变，只是把常量按新的 os.environ 重新算一遍，
+    因此 ``import config; config.X`` 的读者立刻看到新值。
+    ``from config import X`` 的读者拿不到更新，由各自的 ``refresh_from_env()``
+    重新绑定（见 common/env_refresh.py 的调度顺序）。
+    """
+    import importlib
+
+    importlib.reload(sys.modules[__name__])

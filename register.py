@@ -33,6 +33,7 @@ try:
 except Exception:
     direct_proxy = None
     proxy_switch = None
+from common.async_batch import gather_settled
 from common import human_mouse as _hm
 from common.traffic_saver import (
     install as install_traffic_saver,
@@ -6855,7 +6856,8 @@ async def main():
                     "sk": sk,
                 })
 
-    await asyncio.gather(*[run_one(i) for i in range(1, total + 1)])
+    # 单个 worker 崩溃不应该让整批停摆：异常折算成该账号的一次失败。
+    await gather_settled(run_one(i) for i in range(1, total + 1))
 
     if new_user_access_paused.is_set():
         print(

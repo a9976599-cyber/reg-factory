@@ -823,7 +823,8 @@ def _write_env_file(path, updates):
     lines = []
     seen = set()
     if os.path.isfile(path):
-        lines = open(path, encoding="utf-8").read().splitlines()
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
     out = []
     for line in lines:
         s = line.strip()
@@ -858,22 +859,15 @@ def _apply_saved_env(updates):
         else:
             os.environ[key] = value
 
-    import importlib
-    # Provider adapters cache environment-backed defaults at import time. They
-    # must be reloaded together with config so changing the fingerprint browser
-    # in the WebUI takes effect for the next connectivity check/worker.
-    for name in (
-        "config",
-        "common.direct_proxy",
-        "common.proxy_switch",
-        "common.sms",
-        "common.temp_email",
-        "common.cloak_browser",
-        "common.roxy_browser",
-    ):
-        module = sys.modules.get(name)
-        if module is not None:
-            importlib.reload(module)
+    # Provider adapters cache environment-backed defaults at import time, so the
+    # fingerprint browser / SMS / mail settings must be re-read here for the next
+    # connectivity check or worker. This used to be a chain of importlib.reload(),
+    # which broke `from X import name` callers (they keep the old objects) and
+    # silently dropped runtime hooks; common.env_refresh updates the cached
+    # module-level settings in place instead.
+    from common import env_refresh
+
+    env_refresh.refresh_all()
 
     if "HTTPS_PROXY" not in BOOT_ENV:
         try:
@@ -2020,7 +2014,27 @@ async def api_chatgpt_plus_protocol_batch(request: Request):
         async with semaphore:
             return item, await asyncio.to_thread(_plus_trial_gate_sync, item)
 
-    checks = await asyncio.gather(*(check_one(item) for item in candidates))
+    raw_checks = await asyncio.gather(
+        *(check_one(item) for item in candidates), return_exceptions=True
+    )
+    # One failing account must not 500 the whole batch (the remaining workers
+    # would also keep running as orphan tasks). Fold the exception into a
+    # "did not qualify" entry so it shows up in `skipped` instead.
+    checks = []
+    for entry, outcome in zip(candidates, raw_checks):
+        if isinstance(outcome, BaseException):
+            checks.append(
+                (
+                    entry,
+                    {
+                        "email": entry.get("email", ""),
+                        "plus_trial": "check_failed",
+                        "error": f"{type(outcome).__name__}: {outcome}",
+                    },
+                )
+            )
+        else:
+            checks.append(outcome)
     # A campaign/discount is not proof of a 0 yuan checkout.
     allowed = {"zero_price"}
     eligible = [item for item, result in checks if result.get("plus_trial") in allowed]
@@ -2213,9 +2227,24 @@ async def _plus_trial_gate(path: str, method: str, body: bytes):
         async with semaphore:
             return await asyncio.to_thread(_plus_trial_gate_sync, item)
 
-    results = await asyncio.gather(*(check_one(item) for item in items))
-    # Fail closed unless the latest read-only check proved a zero price.
+    raw_results = await asyncio.gather(
+        *(check_one(item) for item in items), return_exceptions=True
+    )
+    # Fail closed unless the latest read-only check proved a zero price. A raised
+    # check is reported as its own blocked entry rather than aborting the batch.
     allowed = {"zero_price"}
+    results = []
+    for item, outcome in zip(items, raw_results):
+        if isinstance(outcome, BaseException):
+            results.append(
+                {
+                    "email": item.get("email", ""),
+                    "plus_trial": "check_failed",
+                    "error": f"{type(outcome).__name__}: {outcome}",
+                }
+            )
+        else:
+            results.append(outcome)
     blocked = [item for item in results if item.get("plus_trial") not in allowed]
     if blocked:
         return JSONResponse(
@@ -2333,10 +2362,11 @@ def _existing_emails():
 def api_mailpool_get():
     total = 0
     if os.path.isfile(EMAILS_FILE):
-        for line in open(EMAILS_FILE, encoding="utf-8"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                total += 1
+        with open(EMAILS_FILE, encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    total += 1
     return {"total": total}
 
 
@@ -2468,7 +2498,8 @@ def api_mailpool_export():
     """导出整个邮箱池为 txt 下载。"""
     if not os.path.isfile(EMAILS_FILE):
         return PlainTextResponse("", media_type="text/plain")
-    raw = open(EMAILS_FILE, encoding="utf-8").read()
+    with open(EMAILS_FILE, encoding="utf-8") as handle:
+        raw = handle.read()
     return PlainTextResponse(raw, media_type="text/plain",
                              headers={"Content-Disposition": 'attachment; filename="emails.txt"'})
 

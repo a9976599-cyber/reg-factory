@@ -14,14 +14,23 @@
   把任务子进程反向唤起本 exe，让 frozen bootloader 把命令行路由到对应脚本（而不是再开一个
   控制台窗口 / uvicorn 实例）。本入口必须先识别 `--task` 再决定走哪条路径，否则就会
   出现「点运行任务 → 又开一个控制台窗口 → 任务没启动」的现象（v2.0.8 的回归）。
+  解析规则统一在 `task_dispatch.py`，与 `scripts/reg-factory-server.py` 共用。
+
+与官方冻结入口的差异（别再踩一次）：
+- 官方 exe 的入口额外包含本仓库没有的两段 —— `ysq_auth.try_cached_login_quiet()`
+  （闭源授权子系统）与 `webui.embedded_backends.try_start_embedded()`（内置引擎
+  内联启动）。所以**从这份源码重建的 exe 不会带授权徽章**；正式发布包走
+  「官方二进制 + 入口补丁」路线，见 tools/binary_patch/。
+- 本文件对齐了官方的 `REG_FACTORY_SMOKE` 自检与窗口标题，尽量把这类漂移缩到最小。
 """
 import os
-import runpy
 import socket
 import sys
 import threading
 import time
 import traceback
+
+import task_dispatch
 
 DEFAULT_PORT = int(os.environ.get("REG_FACTORY_PORT", "8799"))
 LOG_PATH = None
@@ -54,10 +63,27 @@ def setup_log():
         LOG_PATH = os.path.join(os.environ.get("TEMP", "."), "reg-factory-desktop.log")
 
 
-def msgbox(text, title="reg-factory 控制台", icon=0x10):
+def msgbox(text, title="auto free 控制台", icon=0x10):
     try:
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, text, title, icon)
+    except Exception:
+        pass
+
+
+def _smoke_marker(state):
+    """无界面自检标记：写 exe 同目录 auth-smoke-ok.txt。
+
+    与官方冻结入口同形：发布流水线用 ``REG_FACTORY_SMOKE=1`` 空跑一次，靠这个
+    文件判断「后端真的起来了」，不需要有人盯着窗口点。缺了它不是普通用户的
+    问题，但会让「发布包 ≠ 仓库源码」的漂移无从发现。
+    """
+    try:
+        exe_dir = os.path.dirname(
+            os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__)
+        )
+        with open(os.path.join(exe_dir, "auth-smoke-ok.txt"), "w", encoding="utf-8") as f:
+            f.write(f"smoke-{state} {time.strftime('%Y-%m-%d %H:%M:%S')}")
     except Exception:
         pass
 
@@ -128,52 +154,26 @@ def wait_for_backend(port, timeout=40):
 
 
 def _configure_live_output():
-    """WebUI 通过 stdout pipe 实时回显任务输出；强制行缓冲避免批量打印。"""
-    os.environ["PYTHONUNBUFFERED"] = "1"
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if not callable(reconfigure):
-            continue
-        try:
-            reconfigure(line_buffering=True, write_through=True)
-        except (OSError, ValueError):
-            pass
+    """WebUI 通过 stdout pipe 实时回显任务输出；强制行缓冲避免批量打印。
+
+    实现已收敛到 `task_dispatch.configure_live_output`（三个入口共用同一份），
+    这里保留同名包装以兼容既有调用方。
+    """
+    task_dispatch.configure_live_output()
 
 
 def _dispatch_task(raw_args):
     """如果命令行是 `reg-factory.exe -u --task X.py ...`，直接跑 X.py 并返回 True。
 
-    与上游 2.2.4 的 `scripts/reg-factory-server.py` 同形协议，保证 WebUI `_build_cmd`
-    的 frozen 模式构造的命令行能直接落地。
+    解析与执行统一走 ``task_dispatch``（与 `scripts/reg-factory-server.py` 共用
+    同一份实现），保证 WebUI `_build_cmd` 在 frozen 模式构造的命令行能直接落地，
+    并且 `--task` 后面漏写脚本名时会退回正常启动路径而不是报错。
     """
     global _TASK_DISPATCH
-    if not raw_args:
-        return False
-    head = raw_args[0]
-    if head == "--task":
-        if len(raw_args) < 2:
-            return False
-        target = raw_args[1]
-        arg_offset = 2
-    elif head.lower().endswith(".py"):
-        target = head
-        arg_offset = 1
-    else:
+    if task_dispatch.parse_task(raw_args) is None:
         return False
     _TASK_DISPATCH = True
-    _configure_live_output()
-    if getattr(sys, "frozen", False):
-        # PyInstaller onedir 形态：解压后的临时目录包含全部 .py 任务
-        bundle_root = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(sys.executable))
-    else:
-        bundle_root = os.path.dirname(os.path.abspath(__file__))
-    target_path = os.path.join(bundle_root, target)
-    if not os.path.isfile(target_path):
-        raise SystemExit(f"task script not found: {target_path}")
-    sys.path.insert(0, bundle_root)
-    sys.argv = [target_path, *raw_args[arg_offset:]]
-    log(f"task dispatch → {target_path} argv={sys.argv[1:]}")
-    runpy.run_path(target_path, run_name="__main__")
+    task_dispatch.dispatch_task(raw_args, log=log)
     return True
 
 
@@ -203,6 +203,8 @@ def main():
 
     if not wait_for_backend(port):
         log("backend failed to start:\n" + traceback.format_exc())
+        if os.environ.get("REG_FACTORY_SMOKE") == "1":
+            _smoke_marker("backend-fail")
         msgbox(
             "reg-factory 服务启动失败，无法打开控制台。\n"
             f"详情日志：{LOG_PATH}\n\n"
@@ -211,10 +213,23 @@ def main():
         return
 
     log(f"backend ready: {url}")
+
+    if os.environ.get("REG_FACTORY_SMOKE") == "1":
+        # 冒烟模式：后端起来了就落一个标记然后退出，不弹窗口（发布流水线用）。
+        _smoke_marker("ok")
+        log("smoke ok, exit without window")
+        try:
+            import ysq_auth
+
+            ysq_auth.shutdown()
+        except BaseException:  # noqa: BLE001 - 源码形态没有闭源授权模块，忽略即可
+            pass
+        return
+
     try:
         import webview
         webview.create_window(
-            "reg-factory 控制台",
+            "auto free 控制台",
             url,
             width=1440,
             height=900,

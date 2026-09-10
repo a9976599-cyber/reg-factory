@@ -8,7 +8,7 @@
 
 ### Windows 便携版
 
-1. 打开项目的 [Releases](https://github.com/tiantianGPU/reg-factory/releases/latest)。
+1. 打开项目的 [Releases](https://github.com/a9976599-cyber/reg-factory/releases/latest)。
 2. 下载 `reg-factory-windows-x64-<版本>.zip` 和对应的 `.sha256.txt`。
 3. 把 ZIP 完整解压到固定目录，例如 `D:\RegFactory`。不要在压缩包预览窗口中直接双击 EXE。
 4. 双击 `reg-factory.exe`。控制台窗口保持打开，浏览器会自动访问 `http://127.0.0.1:8799/`。

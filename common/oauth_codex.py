@@ -471,17 +471,22 @@ async def _enter_otp(page, code):
 
 
 async def _wait_for_phone_flow_exit(page, timeout=20):
-    """Wait until phone verification reaches consent or the OAuth callback."""
+    """Wait until phone verification reaches consent or the OAuth callback.
+
+    先判断一次当前页面再进等待（do-while 语义）：``timeout=0`` 时也要给出
+    当次快照的结论，而不是因为循环体一次都没跑就直接返回 False。
+    """
     deadline = time.time() + timeout
-    while time.time() <= deadline:
+    while True:
         if _is_authorization_advanced_url(page.url):
             return True
         if not _is_phone_flow_url(page.url):
             return False
         if await _has_phone_error(page):
             return False
+        if time.time() >= deadline:
+            return False
         await asyncio.sleep(0.5)
-    return False
 
 
 async def _goto_add_phone(

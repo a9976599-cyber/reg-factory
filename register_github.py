@@ -43,6 +43,7 @@ sys.path.insert(0, ".")
 from playwright.async_api import async_playwright
 import requests
 
+from common.async_batch import gather_settled
 from common.browser import open_and_connect, teardown, human_type, react_fill
 from common import proxy_switch
 from common.mailbox import get_code_outlook_pw
@@ -336,7 +337,8 @@ def load_pool_accounts():
     out = []
     for f in files:
         try:
-            d = json.load(open(f, encoding="utf-8"))
+            with open(f, encoding="utf-8") as handle:
+                d = json.load(handle)
             email = d.get("email")
             pw = d.get("password")
             if email and pw:
@@ -748,10 +750,11 @@ async def _run_batch(args):
                 async with async_playwright() as p:
                     return await run_attempts(index, account, p)
 
-    results = await asyncio.gather(*(
+    # 异常折算成 None —— 下面的汇总把 None 当「未完成」，不会误判为成功。
+    results = await gather_settled(
         run_one(index, account)
         for index, account in enumerate(accounts, 1)
-    ))
+    )
     if args.auto:
         completed = sum(bool(result and result != "SKIP_VARIANT") for result in results)
         label = "success"

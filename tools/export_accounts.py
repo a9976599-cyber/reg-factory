@@ -120,7 +120,8 @@ def load_platform(name, cfg):
     seen_keys = set()  # 按关键 cookie 值去重
     for fp in full_files:
         try:
-            cookies = json.load(open(fp, encoding="utf-8"))
+            with open(fp, encoding="utf-8") as handle:
+                cookies = json.load(handle)
         except Exception as e:
             print(f"  skip {fp}: {e}")
             continue

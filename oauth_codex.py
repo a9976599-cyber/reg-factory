@@ -99,7 +99,8 @@ async def main():
         print("  [FAIL] 找不到 cookie 文件")
         return 1
     print(f"  cookie: {cookie_file}")
-    cookies = _sanitize(json.load(open(cookie_file, encoding="utf-8")))
+    with open(cookie_file, encoding="utf-8") as handle:
+        cookies = _sanitize(json.load(handle))
 
     origin = _origin(SUB2API_URL) if auth_source == "sub2" else ""
     ok = False

@@ -30,11 +30,24 @@ import time
 
 import requests
 
+import config as _config
 from config import (
     SMS_API_BASE, SMS_TOKEN,
     HERO_SMS_API_BASE, HERO_SMS_API_KEY, HERO_SMS_COUNTRY_PREFER,
     SMSMAN_API_BASE, SMSMAN_TOKEN,
 )
+
+# ``from config import X`` 拿到的是值快照，WebUI 保存配置后需要重新绑定。
+_SMS_CONFIG_KEYS = (
+    "SMS_API_BASE", "SMS_TOKEN",
+    "HERO_SMS_API_BASE", "HERO_SMS_API_KEY", "HERO_SMS_COUNTRY_PREFER",
+    "SMSMAN_API_BASE", "SMSMAN_TOKEN",
+)
+
+
+def refresh_from_env():
+    """把 config 的最新值重新绑定到本模块（见 common/env_refresh.py）。"""
+    globals().update({key: getattr(_config, key) for key in _SMS_CONFIG_KEYS})
 
 
 def get_phone(project_id, hero_service, country_prefer=("",), country_blacklist=(), max_retries=5, max_price="0",

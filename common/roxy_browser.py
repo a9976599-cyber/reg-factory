@@ -9,7 +9,23 @@ from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 
+import config as _config
 from config import *  # noqa: F403 - these are environment-backed settings
+
+
+def refresh_from_env():
+    """重新绑定 config 里的 ROXY_* 常量（见 common/env_refresh.py）。
+
+    ``from config import *`` 只在首次导入时绑定；WebUI 改完配置后需要把新值
+    覆盖过来。限定 ROXY_ 前缀，避免碰到本模块自己定义的公开函数。
+    """
+    globals().update(
+        {
+            name: value
+            for name, value in vars(_config).items()
+            if name.startswith("ROXY_")
+        }
+    )
 
 
 def _value(payload, keys):

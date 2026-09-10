@@ -19,8 +19,9 @@ if ([string]::IsNullOrWhiteSpace($InstallDir)) {
         $InstallDir = Join-Path $HOME "reg-factory"
     }
 }
-$Repo = "https://github.com/tiantianGPU/reg-factory.git"
-$Archive = "https://github.com/tiantianGPU/reg-factory/archive/refs/heads/main.zip"
+# 本项目（fork）仓库：安装/更新都只从这里取，避免拉回未打补丁的上游版本。
+$Repo = "https://github.com/a9976599-cyber/reg-factory.git"
+$Archive = "https://github.com/a9976599-cyber/reg-factory/archive/refs/heads/main.zip"
 
 function Install-Repository {
     if (Test-Path (Join-Path $InstallDir ".git")) {
@@ -78,7 +79,7 @@ if ($Action -eq "update") {
     }
     $tempUpdater = Join-Path ([System.IO.Path]::GetTempPath()) ("reg-factory-update-" + [guid]::NewGuid() + ".ps1")
     try {
-        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/tiantianGPU/reg-factory/main/update.ps1" -OutFile $tempUpdater
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/a9976599-cyber/reg-factory/main/update.ps1" -OutFile $tempUpdater
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempUpdater -Root $InstallDir
         if ($LASTEXITCODE -ne 0) { throw "reg-factory update failed" }
     } finally {

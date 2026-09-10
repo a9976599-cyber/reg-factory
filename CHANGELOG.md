@@ -1,5 +1,59 @@
 ﻿# 更新日志
 
+## 2026-09-11 - 2.2.7
+
+**全量缺陷修复版（发布链路 / 任务派发 / 指南入口 / 健壮性）**
+
+上一轮做完仓库缺陷排查后逐条修掉。最要紧的一类是「发布与更新链路是断的」：
+自带发布脚本跑不通、内置更新器指向别人的仓库，本分支的新版本永远发不出去。
+
+### 功能性修复
+
+- **发布流水线恢复可用**：`scripts/build_release.ps1` 原先跑到全量单元测试就红
+  （611 tests / 3 failures），紧接着 `throw "Python tests failed."` 直接中止，
+  根本产不出正式包。三个失败用例全部修好，现为 **621 tests / 0 failures**。
+- **根目录 `build_win_exe.ps1` 硬编码他人机器路径**
+  （`C:\Users\99765\reg-factory`）且版本号写死 `2.0.8`：换台机器必然失败，
+  产物名也永远和 `VERSION` 对不上。改成转发壳，统一走 `scripts/build_release.ps1`
+  （从 `VERSION` 读版本并校验一致）。
+- **内置「一键更新」查的是上游仓库**：`update-portable.ps1` 改为指向本分支仓库，
+  并抽成脚本顶部单一常量 `$ReleaseRepo`。这条方向性问题两边都危险 ——
+  上游版本号一旦超过本分支，点更新会把补丁版覆盖回未修复的入口。
+- **新手指南整层是死功能**：`tests/test_webui_tour.py` 要的 `id="btn-guide"`
+  按钮在 `index.html` 里不存在、`app.js` 也没绑定，`guideStorageCompleted()`
+  零调用 —— 首次不弹、之后也打不开（而指南文案里却承诺「可从顶栏重新打开」）。
+  CSS 里 `.guide-button` 的样式其实还在，说明是 HTML/JS 被删过。已补回入口、
+  首次自动打开、走完写完成标记。
+- **`REG_FACTORY_SMOKE` 自检与官方入口对齐**：官方冻结入口带 `_smoke_marker()`
+  （写 `auth-smoke-ok.txt`）与 `REG_FACTORY_SMOKE` 分支，仓库源码里没有 ——
+  从源码重建的 exe 会静默丢掉这个能力。已按反汇编结果补回，并顺带对齐窗口标题。
+
+### 健壮性修复
+
+- **配置热更新不再 `importlib.reload`**：保存 .env 后逐个 reload 模块有两个硬伤
+  —— `from X import name` 的调用方仍持有旧对象（配置改了但行为不变，极难排查），
+  且会静默丢弃运行期注入的钩子。改为 `common/env_refresh.refresh_all()` 调度各
+  模块自己实现的 `refresh_from_env()`，就地更新模块级常量。
+- **批量并发不再「一错全败」**：`asyncio.gather` 下单个协程抛异常会让整批作业
+  直接 500，其余已在跑的协程变成僵尸任务。新增
+  `common/async_batch.gather_settled()`，在 11 处批量作业里把异常折算成一条失败
+  结果（保留 `CancelledError` 的传播语义）。
+- **`--task` 缺目标参数时退化成字面量**：`scripts/reg-factory-server.py` 会把
+  字符串 `--task` 当成脚本名，报 `task script not found: --task`。现在统一返回
+  「不是任务派发」，回落正常启动 WebUI，与桌面入口行为一致。
+
+### 重构与卫生
+
+- **「任务派发」收敛为单一实现** `task_dispatch.py`：桌面入口与脚本入口共用；
+  补丁入口因物理约束（注入官方冻结包，而官方 PYZ 里没有这个模块）自带一份等价
+  实现，两份的一致性由 `tests/test_task_dispatch.py` 断言锁定，防止再次分叉。
+- **`.env.example` 补齐 7 个「界面可编辑但模板漏列」的键**，并加断言测试
+  （界面可编辑 ⊆ 模板已定义）。反方向的差异是设计如此，不做对齐。
+- **文件句柄**：修掉 6 处未用 `with` 的 `open()`，其中 `webui/server.py` 的
+  `index()` 是每刷新一次首页就泄漏一个句柄。
+- **新增 CI**（`.github/workflows/ci.yml`）：零依赖跑全量编译、`node --check`
+  与静态不变量测试，挡住「源码与发布包悄悄分叉」这一类回归。
+
 ## 2026-09-11 - 2.2.6
 
 **Windows 便携包修复版（保留官方授权子系统）**

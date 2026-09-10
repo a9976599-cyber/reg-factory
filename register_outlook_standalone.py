@@ -53,6 +53,7 @@ except Exception:
 
 # Outlook 注册和解锁共用同一套 PerimeterX 目标定位与拟人按压。
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common.async_batch import gather_settled
 from common import outlook_press as _outlook_press
 from common.browser import react_fill
 from common.traffic_saver import install as install_traffic_saver
@@ -3694,7 +3695,8 @@ async def main():
             print(f"{'#' * 50}")
             await register_one(bb, i + 1, proxy, results, results_lock, live_fh, mode=args.mode)
 
-    await asyncio.gather(*[run_one(i) for i in range(count)])
+    # 单个账号崩溃不应该让整批中断；live_fh 仍会被下面的 close() 收尾。
+    await gather_settled(run_one(i) for i in range(count))
     live_fh.close()
 
     # Summary

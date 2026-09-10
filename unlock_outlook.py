@@ -43,6 +43,7 @@ from playwright.async_api import async_playwright
 # 与 Outlook 注册共用完整的 PerimeterX 目标定位和拟人按压实现。
 # 保证脚本被 importlib 从任意路径加载时也能找到 common 包。
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common.async_batch import gather_settled
 from common import outlook_press as _outlook_press
 from common.browser import open_and_connect, react_fill, teardown
 
@@ -908,14 +909,15 @@ async def run(accounts_or_file, proxies, concurrency):
     for i, acc in enumerate(accounts):
         chunks[i % concurrency].append(acc)
 
-    await asyncio.gather(*[
+    # 单个分片崩溃不应该让整批中断（失败项由 worker 自己写入 results）。
+    await gather_settled(
         worker(
             chunks[i], proxies[i % len(proxies)], i,
             results, graph_attempts, sem,
         )
         for i in range(concurrency)
         if chunks[i]
-    ])
+    )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_results(results, timestamp)

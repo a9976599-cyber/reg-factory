@@ -29,6 +29,7 @@ if sys.platform == "win32":
 sys.path.insert(0, ".")
 from playwright.async_api import async_playwright
 
+from common.async_batch import gather_settled
 from common.browser import open_and_connect, teardown, human_type, react_fill
 from common.mailbox import get_code_by_token, get_code_outlook_pw, prelogin_outlook
 from common.cookies import save_platform_cookies
@@ -3656,7 +3657,8 @@ async def main():
                         print(f"  #{i} fatal: {e}")
                         results.append(None)
 
-    await asyncio.gather(*[run_one(i) for i in range(1, args.count + 1)])
+    # 单个账号的致命错误不应该让整批中断（run_one 已把失败记为 None）。
+    await gather_settled(run_one(i) for i in range(1, args.count + 1))
 
     ok = sum(1 for r in results if r)
     print(f"\n{'='*50}\n  success: {ok}/{len(results)}\n{'='*50}")

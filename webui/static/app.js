@@ -2298,6 +2298,8 @@ function finishGuide(){
 }
 
 let guideRenderToken = 0;
+// 顶栏入口：指南走完后仍可随时重开（文案里也是这么承诺的）。
+$('#btn-guide').onclick = ()=>startGuide(0);
 $('#btn-tour-close').onclick = finishGuide;
 $('#btn-tour-exit').onclick = finishGuide;
 $('#btn-tour-prev').onclick = ()=>renderGuideStep(guideIndex-1);
@@ -2315,6 +2317,11 @@ document.addEventListener('scroll', scheduleGuidePosition, true);
 document.addEventListener('keydown', event=>{
   if(guideActive && event.key==='Escape') finishGuide();
 });
+
+// 首次使用自动打开指南；走完/跳过后写入完成标记，之后只能从顶栏手动重开。
+if(!guideStorageCompleted()){
+  setTimeout(()=>{ startGuide(0); }, 900);
+}
 
 // ---------------------------------------------------------------- 邮箱池
 async function loadMailpool(){

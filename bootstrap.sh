@@ -3,9 +3,10 @@ set -euo pipefail
 
 ACTION="${1:-${REG_FACTORY_ACTION:-install}}"
 INSTALL_DIR="${REG_FACTORY_DIR:-}"
-REPO="https://github.com/tiantianGPU/reg-factory.git"
-ARCHIVE="https://github.com/tiantianGPU/reg-factory/archive/refs/heads/main.tar.gz"
-UPDATE_SCRIPT="https://raw.githubusercontent.com/tiantianGPU/reg-factory/main/update.sh"
+# 本项目（fork）仓库：安装/更新都只从这里取，避免拉回未打补丁的上游版本。
+REPO="https://github.com/a9976599-cyber/reg-factory.git"
+ARCHIVE="https://github.com/a9976599-cyber/reg-factory/archive/refs/heads/main.tar.gz"
+UPDATE_SCRIPT="https://raw.githubusercontent.com/a9976599-cyber/reg-factory/main/update.sh"
 
 if [ -z "$INSTALL_DIR" ]; then
   DETECT_PY="$(command -v python3 || command -v python || true)"

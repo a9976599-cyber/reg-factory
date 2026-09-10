@@ -21,6 +21,7 @@ from datetime import datetime
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
+from common.async_batch import gather_settled
 from common import emails as email_pool
 
 
@@ -325,13 +326,18 @@ async def process_account(account, args, child_env):
     try:
         jobs = [(p, build_command(p, args, account)) for p in args.platforms]
         if args.parallel:
-            results = await asyncio.gather(*(
-                run_platform(
-                    p, cmd, run_id, child_env,
-                    retries=platform_retry_count(p, args),
-                )
-                for p, cmd in jobs
-            ))
+            results = await gather_settled(
+                (
+                    run_platform(
+                        p, cmd, run_id, child_env,
+                        retries=platform_retry_count(p, args),
+                    )
+                    for p, cmd in jobs
+                ),
+                # 失败项必须保持 (platform, ok, rc, log_path) 四元组形状，
+                # 否则下面的解包汇总会直接 TypeError。
+                on_error=lambda exc, index: (jobs[index][0], False, -1, ""),
+            )
         else:
             results = []
             for platform, cmd in jobs:

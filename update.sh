@@ -62,7 +62,7 @@ update_repository() {
   local temp_root
   temp_root="$(mktemp -d)"
   trap 'rm -rf "$temp_root"' RETURN
-  curl -fL "https://github.com/tiantianGPU/reg-factory/archive/refs/heads/main.tar.gz" -o "$temp_root/main.tar.gz"
+  curl -fL "https://github.com/a9976599-cyber/reg-factory/archive/refs/heads/main.tar.gz" -o "$temp_root/main.tar.gz"
   mkdir -p "$temp_root/extract"
   tar -xzf "$temp_root/main.tar.gz" --strip-components=1 -C "$temp_root/extract"
   cp -a "$temp_root/extract/." "$ROOT/"

@@ -45,7 +45,7 @@ function Update-Repository {
     $extractPath = Join-Path $tempRoot "extract"
     New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
     try {
-        Invoke-WebRequest -Uri "https://github.com/tiantianGPU/reg-factory/archive/refs/heads/main.zip" -OutFile $zipPath
+        Invoke-WebRequest -Uri "https://github.com/a9976599-cyber/reg-factory/archive/refs/heads/main.zip" -OutFile $zipPath
         Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force
         $source = Join-Path $extractPath "reg-factory-main"
         if (-not (Test-Path $source)) { throw "GitHub archive layout is invalid" }

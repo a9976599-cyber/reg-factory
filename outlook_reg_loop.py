@@ -32,6 +32,8 @@ import importlib.util
 import urllib.request
 from datetime import datetime
 
+from common.async_batch import gather_settled
+
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1207,10 +1209,15 @@ async def _run_registration_workers(
             if args.sleep > 0:
                 await asyncio.sleep(args.sleep)
 
-    await asyncio.gather(*[
-        run_lane(slot)
-        for slot in range(worker_plan.effective_concurrency)
-    ])
+    # 单条车道崩掉不应该让整批停摆：异常折算成该车道的一次失败记录。
+    def _lane_crashed(exc, index):
+        log(f"lane #{index} crashed: {type(exc).__name__}: {str(exc)[:200]}", "WARN")
+        return None
+
+    await gather_settled(
+        (run_lane(slot) for slot in range(worker_plan.effective_concurrency)),
+        on_error=_lane_crashed,
+    )
     if state["stop_reason"]:
         log(
             f"stopped by success-rate breaker: {state['stop_reason']} "
