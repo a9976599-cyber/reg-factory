@@ -1,5 +1,30 @@
 ﻿# 更新日志
 
+## 2026-09-11 - 2.2.6
+
+**Windows 便携包修复版（保留官方授权子系统）**
+
+- 便携包 `reg-factory-windows-x64-2.2.6.zip` 以官方 2.2.4 冻结包为基线，只替换入口
+  这一条 `PYSOURCE`（`reg_factory_desktop`）：其余条目（6 个运行时钩子、
+  `pyimod01..04`、装着授权模块 `ysq_auth` / `yunshouquan_sdk` 的整个 `PYZ`）
+  逐字节搬运，bootloader 前缀原样保留——授权链路一个字节都没动。
+- 修复：冻结模式下 WebUI 用 `<exe> -u --task <脚本.py>` 反向唤起 exe 来跑任务，
+  而入口没有 `--task` 分支，于是点「运行任务」只会再弹一个 webview、任务不执行、
+  指纹浏览器也不打开。补丁入口先识别 `--task`，命中则在本进程内 `runpy` 执行目标
+  脚本，其余情况把官方入口的 code object 原样 `exec`。
+- 新增 `tools/binary_patch/`：离线给 PyInstaller onedir 冻结包打入口补丁的工具链
+  （`patch_exe.py` 自带极简 CArchive 读写，只依赖标准库；`wrapper_entry.py` 为补丁入口）。
+- 新增 `docs/engine-venvs.md`：随包内置的 A（`engine/aar`，8000）与
+  O（`engine/oar`，8890）两个后端的 venv 位置约定、依赖安装与验证方法。
+- `VERSION` 与发布包对齐为 `2.2.6`；包内 `_internal/VERSION` 即 WebUI 显示的版本号。
+
+**验证**
+
+- 便携包解压到独立目录后双击 `reg-factory.exe`：WebUI `127.0.0.1:8799` 返回 200。
+- `/api/deps-status` 返回 `{"aar":{"present":true,"alive":true},"oar":{"present":true,"alive":true}}`。
+- A 引擎 `8000/api/auth/check`、O 引擎 `8890/api/config` 均返回 200。
+- 发布包内不含任何用户凭据、授权缓存、账号数据库或日志。
+
 ## 2026-08-22 - 2.0.7
 
 **Outlook 检测与状态领取**
