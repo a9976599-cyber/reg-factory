@@ -25,6 +25,9 @@ PYZ 里的 `webui.server` / `common.sms` / `common.session_export` 是官方旧�
 - **[P3] 移除死端点** `POST /api/chatgpt-plus/start`（前端不调用且不真正启动）。
 - **[P3] 根目录裸 `pytest` 崩溃**：gmail_android 的 `config.py` 遮蔽根 `config.py`
   导致收集失败。新增根 `pytest.ini`（testpaths=tests）。
+- **[P1] O 控制台开机自启恢复**：新版 webui.server 顶替 PYZ 旧版后丢失了官方
+  `embedded_backends` 同进程内嵌逻辑，`O 邮箱注册台`(:8890) 不再随面板自启。
+  现于 startup 事件恢复调用 `try_start_embedded()`（仅 frozen 存在，源码模式 no-op）。
 - **[P3] AAR 子进程环境同步**：captured env 无锁并发写 dict（CPython GIL 下无害但未定义），
   已加锁。子进程退出后 `_proc.wait()` 收割，避免僵尸句柄。
 

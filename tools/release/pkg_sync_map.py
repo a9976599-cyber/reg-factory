@@ -64,9 +64,13 @@ DOCS = [
 #                          引用（frozen 的 common 包 __path__ 指向 _internal/common，
 #                          可被 PathFinder 命中，实测可导入）
 #   common.env_refresh  —— 冻结版 webui.server 不会调用它，一并带上以便将来归档重建
+# 2.3.0 新增：common.sms / common.session_export —— PYZ 里是旧版，由 wrapper_entry v3
+#   影子加载生效（修复：SMS 轮询异常日志、token 原子写）。
 NEW_LOOSE_MODULES = [
     "common/async_batch.py",
     "common/env_refresh.py",
+    "common/sms.py",
+    "common/session_export.py",
 ]
 
 # 2.3.0 新增：影子加载模块。

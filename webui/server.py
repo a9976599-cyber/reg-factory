@@ -3594,10 +3594,20 @@ try:
 
     @app.on_event("startup")
     async def startup_aar_backend():
+        global _aar_ready
+        # frozen 便携包：同进程内嵌 engine/aar + engine/oar（:8000/:8890），
+        # 恢复旧版「开机即监听」行为（embedded_backends 只存在于官方 PYZ，
+        # 源码模式没有该模块 → no-op）。必须在 ensure_aar_running 之前执行，
+        # 这样内嵌 A 起来后 aar_bridge 的 venv 拉起会直接跳过。
+        try:
+            from webui import embedded_backends  # noqa: F401 - 仅 frozen 存在
+
+            await asyncio.to_thread(embedded_backends.try_start_embedded)
+        except Exception as exc:  # noqa: BLE001 - 内嵌失败不影响主面板
+            print(f"[aar-bridge] embedded backends skip: {exc}", flush=True)
         # ensure_aar_running 内部最多同步等待 20s（40 x 0.5s 探活），绝不能放在
         # import 期执行：无 AAR 环境的机器上整个 WebUI 启动会被白等到超时。
         # 挪到 startup 事件（线程池）执行；/aar 桥接请求自身也会按需拉起后端。
-        global _aar_ready
         _aar_ready = await asyncio.to_thread(ensure_aar_running)
         print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
 except Exception as _aar_exc:  # 融合桥失败不影响主服务

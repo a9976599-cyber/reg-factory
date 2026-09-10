@@ -33,6 +33,8 @@ class ReleaseArtifactMapTests(unittest.TestCase):
         allowed_common = {
             "_internal/common/async_batch.py",
             "_internal/common/env_refresh.py",
+            "_internal/common/sms.py",
+            "_internal/common/session_export.py",
         }
         # 影子加载名单（必须与 tools/binary_patch/wrapper_entry.py 的
         # _RF_SHADOW_MODULES 一致；webui/server.py 同时也在同步表）
