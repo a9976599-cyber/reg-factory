@@ -393,17 +393,25 @@ async def import_one(index, total, record, playwright, origin, sub2api_token, gr
     return result
 
 
-async def run(args):
-    source_path = Path(args.accounts_file).expanduser().resolve()
-    try:
-        raw = source_path.read_text(encoding="utf-8-sig")
-    finally:
-        if args.delete_input:
-            source_path.unlink(missing_ok=True)
+def load_accounts(accounts_file, delete_input):
+    """读取并解析账号清单。
+
+    解析失败（格式错误/重复）时直接抛错，且**不**删除源文件；仅当整批解析成功、
+    且 delete_input 为真时才删除源文件——避免 ``--delete-input`` 把用户账号清单误删。
+    """
+    source_path = Path(accounts_file).expanduser().resolve()
+    raw = source_path.read_text(encoding="utf-8-sig")
     records, errors = parse_account_text(raw, plus_credentials=True)
     if errors:
         lines = ", ".join(str(item["line"]) for item in errors[:10])
         raise RuntimeError(f"账号格式错误或重复：第 {lines} 行")
+    if delete_input:
+        source_path.unlink(missing_ok=True)
+    return records
+
+
+async def run(args):
+    records = load_accounts(args.accounts_file, args.delete_input)
     if not records:
         raise RuntimeError("没有可导入的账号")
     if args.dry_run:

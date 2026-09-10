@@ -818,6 +818,35 @@ def _parse_env_file(path):
     return out
 
 
+def _safe_env_value(value):
+    """配置值不允许含回车/换行，否则会被 .env 解析拆成多行、注入任意配置键。"""
+    return str(value).replace("\r", " ").replace("\n", " ")
+
+
+def _has_embedded_creds(value):
+    """粗略判断代理 URL 是否内嵌 user:pass 凭证（http://user:pass@host）。"""
+    if not isinstance(value, str) or "://" not in value:
+        return False
+    after = value.split("://", 1)[1]
+    if "@" not in after:
+        return False
+    return ":" in after.split("@", 1)[0]
+
+
+_SECRET_KEY_SUBSTR = ("SECRET", "PASSWORD", "TOKEN", "API_KEY")
+
+
+def _redact_proxy_config(config):
+    """代理面板回显前抹掉凭证类键与内嵌 user:pass，避免被 /aar/ 第三方页 XSS 盗取。"""
+    redacted = {}
+    for key, val in config.items():
+        if any(s in key for s in _SECRET_KEY_SUBSTR) or _has_embedded_creds(val):
+            redacted[key] = "********"
+        else:
+            redacted[key] = val
+    return redacted
+
+
 def _write_env_file(path, updates):
     """把 updates(dict) 写回 .env：已存在的行原地改值(保留注释/顺序)，新 key 追加到末尾。"""
     lines = []
@@ -831,7 +860,7 @@ def _write_env_file(path, updates):
         if s and not s.startswith("#") and "=" in s:
             k = s.partition("=")[0].strip()
             if k in updates:
-                out.append(f"{k}={updates[k]}")
+                out.append(f"{k}={_safe_env_value(updates[k])}")
                 seen.add(k)
                 continue
         out.append(line)
@@ -841,7 +870,7 @@ def _write_env_file(path, updates):
         out.append("")
         out.append("# ---- 由 WebUI 配置页新增 ----")
         for k in extra:
-            out.append(f"{k}={updates[k]}")
+            out.append(f"{k}={_safe_env_value(updates[k])}")
     # 原子写
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -2793,6 +2822,7 @@ def _proxy_panel_data(include_nodes=False):
     config["REG_FACTORY_ALLOW_SHARED_EGRESS"] = config["REG_FACTORY_ALLOW_SHARED_EGRESS"] or "false"
     config["CHATGPT_RESIDENTIAL_ROTATE_RETRIES"] = config["CHATGPT_RESIDENTIAL_ROTATE_RETRIES"] or "3"
     config["REG_FACTORY_PROXY_POOL"] = config["REG_FACTORY_PROXY_POOL"].replace(",", "\n")
+    config = _redact_proxy_config(config)
     nodes = []
     if include_nodes or config["PROXY_MODE"] in {"clash_auto", "clash_fixed"}:
         try:
@@ -3037,7 +3067,8 @@ def api_env_get():
             items.append({
                 "key": it["key"],
                 "label": it.get("label", it["key"]),
-                "value": cur.get(it["key"], ""),
+                # secret 键只回显掩码，真实值由用户在保存时重新提交（防 /aar/ XSS 盗凭证）。
+                "value": ("********" if (it.get("secret") and cur.get(it["key"])) else cur.get(it["key"], "")),
                 "required": it.get("required", False),
                 "secret": it.get("secret", False),
                 "help": it.get("help", ""),
@@ -3063,7 +3094,7 @@ async def api_env_set(request: Request):
     updates = data.get("env") or {}
     # 只接受 schema 里声明的 key，避免写入垃圾
     allowed = set(schema.env_keys())
-    updates = {k: ("" if v is None else str(v)) for k, v in updates.items() if k in allowed}
+    updates = {k: _safe_env_value("" if v is None else v) for k, v in updates.items() if k in allowed}
     if not os.path.isfile(ENV_PATH) and os.path.isfile(ENV_EXAMPLE):
         # 首次保存：以模板为底
         import shutil
@@ -3100,8 +3131,12 @@ def _build_cmd(script, args):
                 cmd.extend(str(v) for v in val)
         else:
             if val not in (None, "", []):
+                sval = str(val)
+                if sval.startswith("-"):
+                    # 以 '-' 开头的值会被子进程 argparse 误判为选项，属参数注入，直接拒绝。
+                    raise ValueError("参数值 %r 以 '-' 开头，疑似选项注入，已拒绝" % sval)
                 cmd.append(flag)
-                cmd.append(str(val))
+                cmd.append(sval)
     cmd.extend(positional)
     return cmd
 
@@ -3403,7 +3438,10 @@ async def api_run(request: Request):
         await asyncio.to_thread(proxy_switch.ensure_proxy_mode, task_env)
     except Exception as exc:
         return JSONResponse({"error": f"网络出口配置未应用: {str(exc)[:160]}"}, status_code=400)
-    cmd = _build_cmd(script, args)
+    try:
+        cmd = _build_cmd(script, args)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
     task_cwd = os.environ.get("REG_FACTORY_DATA_DIR", "").strip() or ROOT
     return await _start_managed_run(cmd, sid, task_env, task_cwd)
 

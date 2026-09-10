@@ -171,6 +171,7 @@ def get_code(pkey, max_wait=180, interval=5):
     if str(pkey).startswith("hero_"):
         return _hero_get_code(pkey, max_wait, interval)
     start = time.time()
+    logged = False
     while time.time() - start < max_wait:
         try:
             resp = requests.get(SMS_API_BASE, params={"act": "getPhoneCode", "token": SMS_TOKEN, "pkey": pkey}, timeout=30)
@@ -179,8 +180,11 @@ def get_code(pkey, max_wait=180, interval=5):
                 code = parts[1]
                 print(f"  [sms] code: {code}")
                 return code
-        except Exception:
-            pass
+        except Exception as exc:
+            # 不再静默吞掉：首次失败打印根因，便于排障（后续轮询仍继续）。
+            if not logged:
+                print(f"  [sms] get_code 首次异常: {exc}")
+                logged = True
         print(f"  waiting sms... ({int(time.time()-start)}s/{max_wait}s)")
         time.sleep(interval)
     return None

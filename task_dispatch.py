@@ -85,7 +85,10 @@ def run_task(parsed, log=None):
     target, rest = parsed
     configure_live_output()
     root = bundle_root()
-    target_path = os.path.join(root, target)
+    target_path = os.path.abspath(os.path.join(root, target))
+    # 防越目录：任务脚本必须落在 bundle 根目录内（--task=../../x.py 会被拒）。
+    if not target_path.startswith(os.path.abspath(root) + os.sep):
+        raise SystemExit("task script escapes bundle root: %s" % target)
     if not os.path.isfile(target_path):
         raise SystemExit("task script not found: %s" % target_path)
     sys.path.insert(0, root)

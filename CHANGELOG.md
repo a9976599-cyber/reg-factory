@@ -1,5 +1,23 @@
 ﻿# 更新日志
 
+## 2.2.9（未发布）— 第四轮全项目审计修复
+
+第四轮审计覆盖 common/config、webui、顶层任务脚本、tools/发布链路全部源码，修复：
+
+- **[P1] WebUI 配置注入**：`/api/env` 保存的值含换行会被拆成多行、注入任意配置键。现已在 `_write_env_file` 与 `/api/env` 写入端净化换行（`_safe_env_value`）。
+- **[P1] 批量注册漏注册误判成功**：Claude 触发 `new_user_access_paused` 跳过的账号不进 `results`，原退出码分母用 `len(results)` 把"漏注册"判为"全成功"。改为以 `total` 为分母。
+- **[P1] outlook 熔断退出码**：成功率熔断（`stop_reason`）属失败态却返回 0，WebUI/CI 误判成功。现已返回 1。
+- **[P1] `--delete-input` 误删账号清单**：解析失败仍删源文件导致数据丢失。改为仅整批解析成功后才删；抽 `load_accounts` 便于单测。
+- **[P2] 凭证回显泄露**：代理面板 `/api/proxy`、GET `/api/env` 明文回传 `CLASH_SECRET`、内嵌 `user:pass` 的代理 URL 等。现已掩码（`_redact_proxy_config`、secret 键回显 `********`）。
+- **[P2] token 落盘非原子**：`session_export` 6 处 `open(path,"w")` 直接覆盖，进程被杀留半截 JSON。统一改 `_write_json_atomic`。
+- **[P2] 接码异常被吞**：`sms.get_code` 轮询 `except: pass` 静默失败。首次异常现打印根因。
+- **[P2] BitBrowser 孤儿窗口**：`register.py` 在 `ClaudeEgressRejected` 重试前未关旧窗口，多次拒绝累积孤儿窗口直至整批停。重试前先 close/delete。
+- **[P3] 任务参数注入**：`/api/run` 把以 `-` 开头的值原样进 argv，被子进程 argparse 误判为选项。现已拒绝。
+- **[P3] 任务越目录执行**：`--task=../../x.py` 可让冻结 exe 跑根外脚本。现 `run_task` 校验目标落在 bundle 根内。
+- **[P3] 更新回滚边缘丢数据**：回滚用复制（`-Merge`）而非移动，保留健康探测窗口内的用户写入。
+
+测试：新增 `tests/test_fourth_round_fixes.py`（7 项回归锁）；全量 `unittest discover` 644 绿。
+
 ## 2026-09-11 - 2.2.8
 
 **交付物同步版（让用户下载到的包真的包含 2.2.7 的修复）**

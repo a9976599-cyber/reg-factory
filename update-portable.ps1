@@ -73,7 +73,9 @@ $UserStatePaths = @(
 function Restore-UserState {
     # 把白名单状态从 $SourceDir 迁入 $TargetDir。目标不存在才整体移动；
     # 目标是已存在目录时只并入新包没有的条目（新包文件优先，永不覆盖）。
-    param([string]$SourceDir, [string]$TargetDir)
+    # -Merge：回滚场景使用——用复制（而非移动）覆盖，保留健康探测 45s 窗口内
+    # 用户进程新写入的状态，避免回滚把刚注册的账号丢回旧快照。
+    param([string]$SourceDir, [string]$TargetDir, [switch]$Merge)
     foreach ($rel in $UserStatePaths) {
         $src = Join-Path $SourceDir $rel
         if (-not (Test-Path -LiteralPath $src)) { continue }
@@ -83,18 +85,33 @@ function Restore-UserState {
             if (-not [string]::IsNullOrWhiteSpace($dstParent)) {
                 New-Item -ItemType Directory -Path $dstParent -Force | Out-Null
             }
-            Move-Item -LiteralPath $src -Destination $dst
+            if ($Merge) {
+                if (Test-Path -LiteralPath $src -PathType Container) {
+                    Copy-Item -LiteralPath $src -Destination $dst -Recurse -Force
+                } else {
+                    Copy-Item -LiteralPath $src -Destination $dst -Force
+                }
+            } else {
+                Move-Item -LiteralPath $src -Destination $dst
+            }
             continue
         }
         if ((Test-Path -LiteralPath $src -PathType Container) -and (Test-Path -LiteralPath $dst -PathType Container)) {
             foreach ($child in (Get-ChildItem -LiteralPath $src -Force)) {
                 $childDst = Join-Path $dst $child.Name
                 if (-not (Test-Path -LiteralPath $childDst)) {
-                    Move-Item -LiteralPath $child.FullName -Destination $childDst
+                    if ($Merge) {
+                        Copy-Item -LiteralPath $child.FullName -Destination $childDst -Recurse -Force
+                    } else {
+                        Move-Item -LiteralPath $child.FullName -Destination $childDst
+                    }
                 }
             }
         }
-        # 目标已存在且源不是目录：保留新包版本，放弃旧文件
+        # 目标已存在且源不是目录：Merge 模式复制覆盖（保留最新写入），非 Merge 保留目标
+        elseif ($Merge -and -not (Test-Path -LiteralPath $src -PathType Container)) {
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+        }
     }
 }
 
@@ -278,7 +295,7 @@ try {
             # 回滚前把已迁入新目录的用户状态回收进备份，否则删除新目录会
             # 连同用户数据一起毁掉。
             try {
-                Restore-UserState -SourceDir $InstallDir -TargetDir $backupDir
+                Restore-UserState -SourceDir $InstallDir -TargetDir $backupDir -Merge
             } catch {}
         }
         Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue

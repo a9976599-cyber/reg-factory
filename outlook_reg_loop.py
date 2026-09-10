@@ -1231,8 +1231,11 @@ async def _run_registration_workers(
         )
     elif args.target_pool and count_pool() >= args.target_pool:
         log(f"target pool reached ({count_pool()}/{args.target_pool}), exit")
-    if state["stop_reason"] or (args.target_pool and count_pool() >= args.target_pool):
-        return 0
+    if state["stop_reason"]:
+        # 成功率熔断属于失败态：即便期间有过成功，本批也未达预期，按失败退出。
+        return 1
+    if args.target_pool and count_pool() >= args.target_pool:
+        return 0 if state["success"] > 0 else 1
     return 0 if state["failed"] == 0 and state["success"] > 0 else 1
 
 

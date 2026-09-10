@@ -417,14 +417,12 @@ def save_chatgpt_tokens(session, email=""):
     name = _safe_email_name(email or session.get("user", {}).get("email") or "account")
 
     session_path = chatgpt_session_path(name)
-    with open(session_path, "w", encoding="utf-8") as f:
-        json.dump(session, f, indent=2, ensure_ascii=False)
+    _write_json_atomic(session_path, session)
 
     try:
         cpa = build_cpa_codex_json(session, email=email)
         cpa_path = os.path.join(pdir, cpa["file_name"])
-        with open(cpa_path, "w", encoding="utf-8") as f:
-            json.dump(cpa["auth_json"], f, indent=2, ensure_ascii=False)
+        _write_json_atomic(cpa_path, cpa["auth_json"])
         print(f"  [chatgpt] token saved: {session_path} + {cpa_path}")
     except Exception as e:
         # session 已落盘,CPA 转换失败不致命(上传脚本可重试)
@@ -434,8 +432,7 @@ def save_chatgpt_tokens(session, email=""):
     try:
         c2a = build_chatgpt2api_account(session, email=email)
         c2a_path = os.path.join(pdir, f"c2a-{name}.json")
-        with open(c2a_path, "w", encoding="utf-8") as f:
-            json.dump(c2a, f, indent=2, ensure_ascii=False)
+        _write_json_atomic(c2a_path, c2a)
         print(f"  [chatgpt] chatgpt2api token saved: {c2a_path}")
     except Exception as e:
         print(f"  [chatgpt] chatgpt2api 转换跳过: {e}")
@@ -456,8 +453,7 @@ def save_grok_token(sso, email="", authorization_status="", announce=True):
     payload = {"email": _s(email), "sso": sso, "ts": int(time.time())}
     if status:
         payload["authorization_status"] = status
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
+    _write_json_atomic(path, payload)
     if announce:
         print(f"  [grok] sso token saved: {path}")
     return True
@@ -471,9 +467,7 @@ def save_claude_token(session_key, email=""):
     pdir = _platform_dir("claude")
     name = _safe_email_name(email or "account")
     path = os.path.join(pdir, f"{name}.sessionKey.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"email": _s(email), "sessionKey": sk, "ts": int(time.time())},
-                  f, indent=2, ensure_ascii=False)
+    _write_json_atomic(path, {"email": _s(email), "sessionKey": sk, "ts": int(time.time())})
     print(f"  [claude] sessionKey saved: {path}")
     return True
 
@@ -489,8 +483,7 @@ def save_codex_oauth_credentials(credentials, email=""):
     output["codex_phone_status"] = status if status in {"verified", "not_verified"} else "unknown"
     name = _safe_email_name(output["email"] or "account")
     path = os.path.join(_platform_dir("chatgpt"), f"oauth-{name}.session.json")
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(output, handle, indent=2, ensure_ascii=False)
+    _write_json_atomic(path, output)
     print(f"  [codex] OAuth credential saved: {path} ({output['codex_phone_status']})")
     return True
 

@@ -6815,6 +6815,18 @@ async def main():
                     break
                 except ClaudeEgressRejected as e:
                     result_status = "ERROR"
+                    # 重试前先回收本轮已开的 BitBrowser 窗口，否则多次 egress 拒绝会
+                    # 累积孤儿窗口，最终命中"窗口数已满"导致整批停止。
+                    if profile_id:
+                        try:
+                            bb.close_browser(profile_id)
+                        except Exception:
+                            pass
+                        try:
+                            bb.delete_browser(profile_id)
+                        except Exception:
+                            pass
+                        profile_id = None
                     if profile_attempt >= profile_attempts:
                         print(f"  FATAL: residential egress retries exhausted: {e}")
                         break
@@ -6890,7 +6902,9 @@ async def main():
                 [sys.executable, "tools/validate_keys.py", accounts_file],
                 cwd=os.path.dirname(os.path.abspath(__file__)),
             )
-    return 0 if results and ok == len(results) else 1
+    # 分母必须用 total 而非 len(results)：被 new_user_access_paused 跳过的账号不会进
+    # results，若用 len(results) 会把"漏注册"误判为"全成功"（退出码 0，WebUI 误报完成）。
+    return 0 if ok == total and total > 0 else 1
 
 
 if __name__ == "__main__":
