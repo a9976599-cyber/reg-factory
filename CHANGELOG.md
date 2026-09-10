@@ -1,5 +1,24 @@
 ﻿# 更新日志
 
+## 2026-09-11 - 2.2.5
+
+**修复：WebUI 点「运行任务」只弹窗口、任务不执行**
+- 冻结（便携包）模式下，WebUI 的 `_build_cmd` 用 `<exe> -u --task <脚本.py>` 反向唤起 exe 来跑任务，而入口 `reg_factory_desktop` 没有 `--task` 分支，导致每点一次「运行任务」就多弹一个 webview 窗口，真正的注册任务不启动、指纹浏览器不打开，并伴随 8799 端口冲突回退 8800。
+- 从上游 2.2.4 的 `scripts/reg-factory-server.py` 把任务派发协议移植回 `reg_factory_desktop.py`：命中 `-u --task X.py` 时在本进程内用 `runpy.run_path` 执行任务（输出实时透传），其余情况完全保持原有启动路径。
+
+**新增：官方便携包的入口级二进制补丁工具（`tools/binary_patch/`）**
+- 官方发布包的授权（激活）子系统是闭源的（`ysq_auth` / `yunshouquan_sdk`），公开仓库不含这套代码，按源码重建便携包会让授权徽章与激活入口整体消失。
+- 因此提供 `tools/binary_patch/patch_exe.py`：只替换 PyInstaller CArchive 中入口那一条 `PYSOURCE`，其余条目（运行时钩子、`pyimod*`、以及装着授权模块的整个 PYZ）逐字节搬运，bootloader 前缀原样保留——**授权链路不受任何影响**。
+- 补丁入口 `wrapper_entry.py`：命中任务派发就在本进程内 runpy 执行，否则把官方入口 code object 原样 `exec`，授权校验、内嵌后端、WebUI + webview 全部走官方原路径。
+- 脚本自带极简 CArchive 读写，只依赖标准库；要求用与目标 exe 相同的 Python 次版本号运行（官方 2.2.4 为 3.12），版本不符时直接报错退出。
+
+**文档**
+- 新增 `docs/engine-venvs.md`：发布包内置的 A（`engine/aar`，8000）/ O（`engine/oar`，8890）两个后端的 venv 位置约定（桌面端按 `.venv_aar` / `.venv_oar` 硬编码查找）、依赖安装、浏览器二进制与验证方法。
+
+**验证**
+- 补丁产物烟测：`reg-factory.exe -u --task probe_task.py` → 任务脚本在本进程内执行、无第二个 GUI 窗口；GUI 启动后 `/api/auth-info` 返回 `authorized=true`，授权徽章与机器码正常。
+- `tools/binary_patch/patch_exe.py` 对官方 2.2.4 便携包重打一遍并通过自校验（条目数不变、入口回读一致、注入的官方入口 code object 存在）。
+
 ## 2026-08-22 - 2.0.7
 
 **Outlook 检测与状态领取**
