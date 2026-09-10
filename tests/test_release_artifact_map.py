@@ -67,6 +67,20 @@ class ReleaseArtifactMapTests(unittest.TestCase):
         for name in pkg_sync_map.TOOLS:
             self.assertIn("_internal/tools/" + name, pkg_sync_map.sync_map())
 
+    def test_repo_version_file_ends_with_newline(self):
+        """VERSION 逐字节约定：内容恒为 b\"<version>\\n\"。
+
+        发布物断言对 VERSION 是逐字节比对（不开 strip 容错口），打包器只需
+        逐字节复制仓库 VERSION 即可满足；本测试锁住房子的另一端 —— 仓库
+        VERSION 自身必须符合约定，否则打包器怎么复制都是错。
+        """
+        data = (ROOT / "VERSION").read_bytes()
+        self.assertTrue(data.endswith(b"\n"), "VERSION 必须以换行结尾：%r" % data)
+        body = data[:-1]
+        self.assertNotIn(b"\n", body)
+        self.assertNotIn(b"\r", data)
+        self.assertEqual(body, body.strip(), "VERSION 版本号两侧不能有空白：%r" % data)
+
     def test_no_upstream_marker_in_synced_scripts(self):
         """脚本类同步源不能指向上游仓库。
 

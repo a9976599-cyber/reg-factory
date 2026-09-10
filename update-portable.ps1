@@ -52,6 +52,52 @@ function Write-UpdateResult {
     } | ConvertTo-Json | Set-Content -LiteralPath $ResultPath -Encoding UTF8
 }
 
+# 必须跨更新保留的用户状态路径（相对安装目录）。便携包从不附带这些路径，
+# 它们都是运行时才生成的：配置、账号、授权缓存、浏览器用户配置等。
+# 新包落位后、健康探测前，这些路径会从备份目录迁回新目录；回滚时按同一
+# 白名单回收，保证任何失败路径都不丢用户数据。
+# 注意：本名单受 tests/test_update_entrypoints.py 的解析级断言锁定。
+$UserStatePaths = @(
+    "_internal\.env",        # WebUI 保存的全部配置（API key、代理设置等）
+    "login_extension",       # 账号数据（accounts.json 等）
+    "accounts.json",
+    "accounts",
+    "output",
+    "exports",
+    "auto_free_auth.json",   # 授权激活缓存
+    "auto-free-auth.log",
+    ".reg-factory-data",     # 内置浏览器用户配置（common/bundled_browser.py）
+    "cookies"
+)
+
+function Restore-UserState {
+    # 把白名单状态从 $SourceDir 迁入 $TargetDir。目标不存在才整体移动；
+    # 目标是已存在目录时只并入新包没有的条目（新包文件优先，永不覆盖）。
+    param([string]$SourceDir, [string]$TargetDir)
+    foreach ($rel in $UserStatePaths) {
+        $src = Join-Path $SourceDir $rel
+        if (-not (Test-Path -LiteralPath $src)) { continue }
+        $dst = Join-Path $TargetDir $rel
+        if (-not (Test-Path -LiteralPath $dst)) {
+            $dstParent = Split-Path -Parent $dst
+            if (-not [string]::IsNullOrWhiteSpace($dstParent)) {
+                New-Item -ItemType Directory -Path $dstParent -Force | Out-Null
+            }
+            Move-Item -LiteralPath $src -Destination $dst
+            continue
+        }
+        if ((Test-Path -LiteralPath $src -PathType Container) -and (Test-Path -LiteralPath $dst -PathType Container)) {
+            foreach ($child in (Get-ChildItem -LiteralPath $src -Force)) {
+                $childDst = Join-Path $dst $child.Name
+                if (-not (Test-Path -LiteralPath $childDst)) {
+                    Move-Item -LiteralPath $child.FullName -Destination $childDst
+                }
+            }
+        }
+        # 目标已存在且源不是目录：保留新包版本，放弃旧文件
+    }
+}
+
 function Get-PackageVersion {
     param([string]$PackageDir)
     foreach ($relativePath in @("VERSION", "_internal\VERSION")) {
@@ -189,8 +235,19 @@ try {
     $movedOld = $true
     Move-Item -LiteralPath $source.FullName -Destination $InstallDir
     $movedNew = $true
+    # 先迁回用户状态（配置/账号/授权/浏览器配置），再启动新进程做健康探测，
+    # 否则更新成功即清空用户数据。
+    Restore-UserState -SourceDir $backupDir -TargetDir $InstallDir
     $newProcess = Start-Process -FilePath (Join-Path $InstallDir "reg-factory.exe") -ArgumentList @("--host", $ListenHost, "--port", $ListenPort) -WorkingDirectory $InstallDir -PassThru
-    $statusUrl = "http://127.0.0.1:$ListenPort/api/status"
+    # 健康探测跟随 -ListenHost；通配地址（0.0.0.0 / ::）回落到回环地址。
+    $probeHost = $ListenHost
+    if ([string]::IsNullOrWhiteSpace($probeHost) -or $probeHost -eq "0.0.0.0" -or $probeHost -eq "::") {
+        $probeHost = "127.0.0.1"
+    }
+    if ($probeHost.Contains(":") -and -not $probeHost.StartsWith("[")) {
+        $probeHost = "[$probeHost]"
+    }
+    $statusUrl = "http://${probeHost}:$ListenPort/api/status"
     $healthy = $false
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 1
@@ -217,6 +274,13 @@ try {
         Stop-Process -Id $newProcess.Id -Force -ErrorAction SilentlyContinue
     }
     if ($movedNew -and (Test-Path -LiteralPath $InstallDir)) {
+        if ($movedOld -and (Test-Path -LiteralPath $backupDir)) {
+            # 回滚前把已迁入新目录的用户状态回收进备份，否则删除新目录会
+            # 连同用户数据一起毁掉。
+            try {
+                Restore-UserState -SourceDir $InstallDir -TargetDir $backupDir
+            } catch {}
+        }
         Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
     }
     if ($movedOld -and (Test-Path -LiteralPath $backupDir) -and -not (Test-Path -LiteralPath $InstallDir)) {

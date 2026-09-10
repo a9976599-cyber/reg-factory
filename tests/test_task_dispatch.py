@@ -21,6 +21,10 @@ PARSE_CASES = (
     ("-u", "register.py", "--flag", "1"),
     ("--host", "127.0.0.1", "--port", "8799"),
     ("--task", "--flag"),
+    ("--task=outlook_reg_loop.py",),
+    ("-u", "--task=outlook_reg_loop.py", "--count", "2"),
+    ("--task=",),
+    ("-u", "--task="),
 )
 
 
@@ -111,6 +115,22 @@ class GatherSettledTests(unittest.TestCase):
         self.assertEqual([item["index"] for item in results], [0, 1, 2])
         self.assertEqual([item["status"] for item in results], ["failed"] * 3)
         self.assertEqual(seen, [("ValueError", "e0", 0), ("ValueError", "e1", 1), ("ValueError", "e2", 2)])
+
+    def test_on_error_that_raises_does_not_breach_isolation(self):
+        """回归锁：on_error 回调自身抛异常时必须折算为 None，不得击穿整批隔离。"""
+        async def ok(value):
+            return value
+
+        async def boom():
+            raise RuntimeError("task failed")
+
+        def bad_on_error(exc, index):
+            raise KeyError("callback bug")
+
+        async def exercise():
+            return await gather_settled([ok("a"), boom(), ok("c")], on_error=bad_on_error)
+
+        self.assertEqual(asyncio.run(exercise()), ["a", None, "c"])
 
     def test_generator_input_is_consumed_eagerly_and_order_is_kept(self):
         async def later(value, delay):

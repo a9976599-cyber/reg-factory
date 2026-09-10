@@ -71,6 +71,12 @@ def _rf_parse_task(raw_args):
         if len(args) < 2 or not args[1]:
             return None
         return args[1], args[2:]
+    if head.startswith("--task="):
+        # 等号形式 ``--task=X.py``：空值同样退回官方入口
+        target = head[len("--task="):]
+        if not target:
+            return None
+        return target, args[1:]
     if head.lower().endswith(".py"):
         return head, args[1:]
     return None

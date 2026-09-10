@@ -75,6 +75,7 @@ def sync_map():
         "VERSION": "VERSION",
         "_internal/VERSION": "VERSION",
         "CHANGELOG.md": "CHANGELOG.md",
+        "_internal/CHANGELOG.md": "CHANGELOG.md",
         "README.md": "README.md",
         ".env.example": ".env.example",
         "_internal/.env.example": ".env.example",

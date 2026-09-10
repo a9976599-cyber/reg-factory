@@ -48,6 +48,12 @@ def parse_task(raw_args):
         if len(args) < 2 or not args[1]:
             return None
         return args[1], args[2:]
+    if head.startswith(TASK_FLAG + "="):
+        # 等号形式 ``--task=X.py``：空值同样退回正常启动路径
+        target = head[len(TASK_FLAG) + 1:]
+        if not target:
+            return None
+        return target, args[1:]
     if head.lower().endswith(TASK_EXTENSION):
         return head, args[1:]
     return None

@@ -40,6 +40,39 @@ class UpdateEntrypointTests(unittest.TestCase):
         self.assertIn("Downloaded package version", script)
         self.assertIn("Updated WebUI did not report version", script)
 
+    def test_portable_updater_migrates_user_state_before_health_probe(self):
+        """回归锁：更新器整目录替换时必须迁移用户状态，否则更新=清空数据。"""
+        script = (ROOT / "update-portable.ps1").read_text(encoding="utf-8")
+        # 白名单必须覆盖：用户配置、账号、授权缓存、浏览器用户配置
+        self.assertIn("$UserStatePaths", script)
+        for entry in (
+            '"_internal\\.env"',
+            '"login_extension"',
+            '"auto_free_auth.json"',
+            '".reg-factory-data"',
+            '"cookies"',
+        ):
+            self.assertIn(entry, script)
+        # 迁移发生在新包落位之后、健康探测启动之前
+        landed = script.index("$movedNew = $true")
+        migrate = script.index("Restore-UserState -SourceDir $backupDir -TargetDir $InstallDir")
+        probe = script.index("Start-Process -FilePath (Join-Path $InstallDir")
+        self.assertLess(landed, migrate)
+        self.assertLess(migrate, probe)
+        # 回滚路径：删除新目录之前必须先把用户状态回收进备份
+        reclaim = script.index("Restore-UserState -SourceDir $InstallDir -TargetDir $backupDir")
+        wipe = script.index("Remove-Item -LiteralPath $InstallDir -Recurse -Force")
+        self.assertLess(reclaim, wipe)
+        # 备份只在健康探测通过后才删除
+        self.assertLess(script.index("if (-not $healthy)"), script.index("Remove-Item -LiteralPath $backupDir"))
+
+    def test_portable_updater_health_probe_follows_listen_host(self):
+        """健康探测地址必须跟随 -ListenHost，通配地址才回落回环。"""
+        script = (ROOT / "update-portable.ps1").read_text(encoding="utf-8")
+        self.assertNotIn('$statusUrl = "http://127.0.0.1:', script)
+        self.assertIn("$probeHost = $ListenHost", script)
+        self.assertIn('$probeHost -eq "0.0.0.0"', script)
+
 
 if __name__ == "__main__":
     unittest.main()

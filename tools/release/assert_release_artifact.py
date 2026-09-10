@@ -89,10 +89,10 @@ def main():
         if want is None:
             check(False, "源存在 %s <- %s" % (arc, repo_rel), "仓库缺源文件")
             continue
-        if repo_rel == "VERSION":
-            ok = got.strip() == want.strip()
-        else:
-            ok = got == want
+        # 一律逐字节比对。VERSION 曾经刻意 strip() 容错，结果包内 VERSION 少了
+        # 换行（与仓库差 1 字节）52 项断言全过 —— 容错口就是漂移口。
+        # 换行约定改由「仓库 VERSION 必须以 \n 结尾」+ 打包器逐字节复制来保证。
+        ok = got == want
         check(ok, "同步 %s" % arc, "与 %s 不一致" % repo_rel)
 
     print("\n[2] 用户可见修复的内容护栏")
@@ -103,12 +103,14 @@ def main():
 
     print("\n[3] 版本与校验")
     if args.expect_version:
+        # 约定：VERSION 文件内容恒为 b"<version>\n"（逐字节，含结尾换行）。
+        want_v = (args.expect_version + "\n").encode()
         v = read(pkg, "VERSION")
         iv = read(pkg, "_internal/VERSION")
-        check(v is not None and v.strip().decode() == args.expect_version,
-              "VERSION == %s" % args.expect_version)
-        check(iv is not None and iv.strip().decode() == args.expect_version,
-              "_internal/VERSION == %s" % args.expect_version)
+        check(v == want_v, "VERSION == %s（逐字节，含换行）" % args.expect_version,
+              "实际 %r" % v)
+        check(iv == want_v, "_internal/VERSION == %s（逐字节，含换行）" % args.expect_version,
+              "实际 %r" % iv)
     if args.expect_exe_md5:
         exe = os.path.join(pkg, "reg-factory.exe")
         check(os.path.isfile(exe) and md5(exe) == args.expect_exe_md5,

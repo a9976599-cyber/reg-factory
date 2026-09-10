@@ -35,6 +35,11 @@ async def gather_settled(awaitables, *, on_error=None):
         except Exception as exc:  # noqa: BLE001 - 见模块 docstring
             if on_error is None:
                 return None
-            return on_error(exc, index)
+            try:
+                return on_error(exc, index)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - 回调抛异常不得击穿整批隔离
+                return None
 
     return list(await asyncio.gather(*(_settle(i, coro) for i, coro in enumerate(coros))))
