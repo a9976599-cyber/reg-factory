@@ -15,7 +15,19 @@ if sys.platform == "win32":
 import os
 
 import requests
+
+import config as _config
 from config import BITBROWSER_API, FINGERPRINT_BROWSER
+
+# ``from config import X`` 拿到的是值快照，WebUI 保存配置后需要重新绑定
+# （见 common/env_refresh.py）。FINGERPRINT_BROWSER 在 _selected_provider() 里
+# 有 os.environ 优先兜底，但 BITBROWSER_API 没有环境变量回退，必须热更新。
+_BITBROWSER_CONFIG_KEYS = ("BITBROWSER_API", "FINGERPRINT_BROWSER")
+
+
+def refresh_from_env():
+    """把 config 的最新值重新绑定到本模块（见 common/env_refresh.py）。"""
+    globals().update({key: getattr(_config, key) for key in _BITBROWSER_CONFIG_KEYS})
 
 
 def _selected_provider():

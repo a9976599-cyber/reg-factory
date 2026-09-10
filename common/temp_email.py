@@ -39,6 +39,7 @@ if sys.platform == "win32":
 import requests
 
 try:
+    import config as _config
     from config import (
         TEMP_EMAIL_PROVIDER,
         ICLOUD_MAIL_API_BASE, ICLOUD_MAIL_API_KEY, ICLOUD_MAIL_TYPE, ICLOUD_MAIL_SERVICE,
@@ -55,6 +56,7 @@ try:
         CUSTOM_MAIL_MSG_ID_PATH, CUSTOM_MAIL_MSG_PATH,
     )
 except Exception:  # pragma: no cover - config 缺失时的兜底默认
+    _config = None
     TEMP_EMAIL_PROVIDER = "gptmail"
     ICLOUD_MAIL_API_BASE = "https://mail.no-replyca.xyz"
     ICLOUD_MAIL_API_KEY = ICLOUD_MAIL_TYPE = ICLOUD_MAIL_SERVICE = ""
@@ -80,6 +82,32 @@ except Exception:  # pragma: no cover - config 缺失时的兜底默认
     CUSTOM_MAIL_FETCH_AUTH = "key"
     CUSTOM_MAIL_MSG_ID_PATH = "id"
     CUSTOM_MAIL_MSG_PATH = ""
+
+# ``from config import X`` 拿到的是值快照，WebUI 保存配置后需要重新绑定
+# （见 common/env_refresh.py；common/mailbox.create_mailbox 不传 base_url/api_key，
+#  走的就是这些模块级默认值，所以必须能热更新）。
+_TEMP_EMAIL_CONFIG_KEYS = (
+    "TEMP_EMAIL_PROVIDER",
+    "ICLOUD_MAIL_API_BASE", "ICLOUD_MAIL_API_KEY", "ICLOUD_MAIL_TYPE", "ICLOUD_MAIL_SERVICE",
+    "MOEMAIL_BASE_URL", "MOEMAIL_API_KEY", "MOEMAIL_DOMAIN", "MOEMAIL_EXPIRY_MS",
+    "YYDS_BASE_URL", "YYDS_API_KEY",
+    "GPTMAIL_BASE_URL", "GPTMAIL_API_KEY",
+    "REMAIL_BASE_URL", "REMAIL_API_KEY", "REMAIL_PROJECT_ID", "REMAIL_EMAIL_SUFFIX", "REMAIL_SUPPLY",
+    "CFMAIL_BASE_URL", "CFMAIL_ADMIN_PASSWORD", "CFMAIL_SITE_PASSWORD",
+    "CUSTOM_MAIL_BASE_URL", "CUSTOM_MAIL_AUTH_HEADER", "CUSTOM_MAIL_API_KEY",
+    "CUSTOM_MAIL_AUTH_PREFIX", "CUSTOM_MAIL_CREATE_METHOD", "CUSTOM_MAIL_CREATE_PATH",
+    "CUSTOM_MAIL_CREATE_BODY", "CUSTOM_MAIL_EMAIL_PATH", "CUSTOM_MAIL_ID_PATH",
+    "CUSTOM_MAIL_TOKEN_PATH", "CUSTOM_MAIL_FETCH_METHOD", "CUSTOM_MAIL_FETCH_PATH",
+    "CUSTOM_MAIL_FETCH_AUTH", "CUSTOM_MAIL_LIST_PATH", "CUSTOM_MAIL_DETAIL_PATH",
+    "CUSTOM_MAIL_MSG_ID_PATH", "CUSTOM_MAIL_MSG_PATH",
+)
+
+
+def refresh_from_env():
+    """把 config 的最新值重新绑定到本模块（见 common/env_refresh.py）。"""
+    if _config is None:  # pragma: no cover - config 缺失兜底时无值可刷
+        return
+    globals().update({key: getattr(_config, key) for key in _TEMP_EMAIL_CONFIG_KEYS})
 
 HTTP_TIMEOUT = 30
 # 临时邮箱端点在国外，走本机代理反而不稳；这里默认直连（trust_env=False 绕 HTTP(S)_PROXY），

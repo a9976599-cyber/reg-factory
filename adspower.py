@@ -16,11 +16,25 @@ from urllib.parse import urlparse
 import requests
 
 try:
+    import config as _config
     from config import ADSPOWER_API, ADSPOWER_API_KEY, ADSPOWER_GROUP_ID
 except Exception:
+    _config = None
     ADSPOWER_API = os.environ.get("ADSPOWER_API", "http://127.0.0.1:50325")
     ADSPOWER_API_KEY = os.environ.get("ADSPOWER_API_KEY", "")
     ADSPOWER_GROUP_ID = os.environ.get("ADSPOWER_GROUP_ID", "0")
+
+# ``from config import X`` 拿到的是值快照，WebUI 保存配置后需要重新绑定
+# （见 common/env_refresh.py）。注意本模块 ``快照 or os.environ.get(...)`` 的
+# 写法里快照优先，快照非空时环境变量救不了场，所以必须实现热更新。
+_ADSPOWER_CONFIG_KEYS = ("ADSPOWER_API", "ADSPOWER_API_KEY", "ADSPOWER_GROUP_ID")
+
+
+def refresh_from_env():
+    """把 config 的最新值重新绑定到本模块（见 common/env_refresh.py）。"""
+    if _config is None:  # pragma: no cover - config 缺失兜底时无值可刷
+        return
+    globals().update({key: getattr(_config, key) for key in _ADSPOWER_CONFIG_KEYS})
 
 if sys.platform == "win32":
     try:

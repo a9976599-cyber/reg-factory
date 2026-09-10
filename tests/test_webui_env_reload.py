@@ -146,6 +146,51 @@ class WebUIEnvReloadTests(unittest.TestCase):
             server._apply_saved_env({"CUSTOM_BROWSER_API": "http://current-browser.local"})
             self.assertEqual(os.environ["CUSTOM_BROWSER_API"], "http://current-browser.local")
 
+    def test_saved_mail_config_updates_temp_email_constants_immediately(self):
+        """--task 子进程能读到新值不算数 —— 本进程内的临时邮箱常量也要当场更新。
+
+        2.2.6 用 importlib.reload(common.temp_email) 是生效的；2.2.7 换成
+        env_refresh 调度时把它漏掉，界面改 CFMAIL/ICLOUD 等配置后要重启才生效
+        （reg-factory-2.2.7-bug-report.md P2-4）。本测试锁住修复。
+        """
+        import common.temp_email as temp_email
+
+        old_url = temp_email.CFMAIL_BASE_URL
+        old_key = temp_email.ICLOUD_MAIL_API_KEY
+        with patch.object(server, "BOOT_ENV", {}), patch.dict(
+            os.environ,
+            {
+                "CFMAIL_BASE_URL": "http://current-cfmail.local",
+                "ICLOUD_MAIL_API_KEY": "current-mail-key",
+            },
+            clear=False,
+        ):
+            server._apply_saved_env(
+                {
+                    "CFMAIL_BASE_URL": "http://current-cfmail.local",
+                    "ICLOUD_MAIL_API_KEY": "current-mail-key",
+                }
+            )
+            try:
+                self.assertEqual(
+                    temp_email.CFMAIL_BASE_URL, "http://current-cfmail.local",
+                    "_apply_saved_env 后 temp_email.CFMAIL_BASE_URL 仍是旧快照",
+                )
+                self.assertEqual(
+                    temp_email.ICLOUD_MAIL_API_KEY, "current-mail-key",
+                    "_apply_saved_env 后 temp_email.ICLOUD_MAIL_API_KEY 仍是旧快照",
+                )
+            finally:
+                # 还原，避免污染同进程里后续测试的模块全局
+                with patch.dict(
+                    os.environ,
+                    {"CFMAIL_BASE_URL": old_url, "ICLOUD_MAIL_API_KEY": old_key},
+                    clear=False,
+                ):
+                    server._apply_saved_env(
+                        {"CFMAIL_BASE_URL": old_url, "ICLOUD_MAIL_API_KEY": old_key}
+                    )
+
     def test_status_exposes_loaded_version_and_process_id(self):
         with patch.object(server, "_fingerprint_provider", return_value="bitbrowser"):
             with patch.object(server, "_read_config_val", side_effect=lambda _key, default="": default):

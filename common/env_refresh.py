@@ -12,8 +12,7 @@ WebUI 保存 .env 之后，需要让**当前进程**立刻看到新值（连通�
 
 改为：由各模块自己实现 ``refresh_from_env()``，就地更新它缓存的模块级常量；
 本模块只负责按固定顺序调度。没有实现该钩子的模块会被安全跳过（例如
-``common.direct_proxy`` / ``common.temp_email`` 每次调用都读 task_environment，
-本来就没有需要刷新的缓存）。
+``common.direct_proxy`` 每次调用都现取 task_environment，本来就没有需要刷新的缓存）。
 """
 
 from __future__ import annotations
@@ -21,12 +20,17 @@ from __future__ import annotations
 import sys
 
 # 顺序即依赖：config 必须最先刷新，其余模块的常量都是从它取的。
+# 注意：凡模块级 ``from config import`` 且被 WebUI 进程内使用的模块都必须登记在这里
+# 并实现钩子 —— 约定由 tests/test_config_snapshot_convention.py 静态锁死。
 _REFRESH_ORDER = (
     "config",
     "common.proxy_switch",
     "common.cloak_browser",
     "common.roxy_browser",
     "common.sms",
+    "common.temp_email",
+    "adspower",
+    "bitbrowser",
 )
 
 
