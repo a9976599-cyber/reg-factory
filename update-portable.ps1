@@ -73,8 +73,9 @@ $UserStatePaths = @(
 function Restore-UserState {
     # 把白名单状态从 $SourceDir 迁入 $TargetDir。目标不存在才整体移动；
     # 目标是已存在目录时只并入新包没有的条目（新包文件优先，永不覆盖）。
-    # -Merge：回滚场景使用——用复制（而非移动）覆盖，保留健康探测 45s 窗口内
-    # 用户进程新写入的状态，避免回滚把刚注册的账号丢回旧快照。
+    # -Merge：回滚场景使用——用复制（而非移动）覆盖（含已存在的嵌套
+    # 条目），保留健康探测 45s 窗口内用户进程新写入的状态，避免回滚
+    # 把刚注册的账号丢回旧快照。
     param([string]$SourceDir, [string]$TargetDir, [switch]$Merge)
     foreach ($rel in $UserStatePaths) {
         $src = Join-Path $SourceDir $rel
@@ -104,6 +105,19 @@ function Restore-UserState {
                         Copy-Item -LiteralPath $child.FullName -Destination $childDst -Recurse -Force
                     } else {
                         Move-Item -LiteralPath $child.FullName -Destination $childDst
+                    }
+                    continue
+                }
+                # Merge (rollback): overwrite even when the child already exists -
+                # user-side increments win, so nothing written during the 45s health
+                # probe window is lost. Destination is the parent dir $dst so
+                # PowerShell merges/overwrites the same-named child in place.
+                # Non-Merge keeps "new package wins, never overwrite": skip.
+                if ($Merge) {
+                    if (Test-Path -LiteralPath $child.FullName -PathType Container) {
+                        Copy-Item -LiteralPath $child.FullName -Destination $dst -Recurse -Force
+                    } else {
+                        Copy-Item -LiteralPath $child.FullName -Destination $dst -Force
                     }
                 }
             }

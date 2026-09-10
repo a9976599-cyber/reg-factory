@@ -7,7 +7,7 @@
 - **[P1] WebUI 配置注入**：`/api/env` 保存的值含换行会被拆成多行、注入任意配置键。现已在 `_write_env_file` 与 `/api/env` 写入端净化换行（`_safe_env_value`）。
 - **[P1] 批量注册漏注册误判成功**：Claude 触发 `new_user_access_paused` 跳过的账号不进 `results`，原退出码分母用 `len(results)` 把"漏注册"判为"全成功"。改为以 `total` 为分母。
 - **[P1] outlook 熔断退出码**：成功率熔断（`stop_reason`）属失败态却返回 0，WebUI/CI 误判成功。现已返回 1。
-- **[P1] `--delete-input` 误删账号清单**：解析失败仍删源文件导致数据丢失。改为仅整批解析成功后才删；抽 `load_accounts` 便于单测。
+- **[P1] `--delete-input` 误删账号清单**：解析失败仍删源文件导致数据丢失。改为**整批导入成功后**才删（解析或导入失败、dry_run 时保留源文件）；抽 `load_accounts`/`should_delete_input` 便于单测。
 - **[P2] 凭证回显泄露**：代理面板 `/api/proxy`、GET `/api/env` 明文回传 `CLASH_SECRET`、内嵌 `user:pass` 的代理 URL 等。现已掩码（`_redact_proxy_config`、secret 键回显 `********`）。
 - **[P2] token 落盘非原子**：`session_export` 6 处 `open(path,"w")` 直接覆盖，进程被杀留半截 JSON。统一改 `_write_json_atomic`。
 - **[P2] 接码异常被吞**：`sms.get_code` 轮询 `except: pass` 静默失败。首次异常现打印根因。

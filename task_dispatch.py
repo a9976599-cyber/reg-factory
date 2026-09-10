@@ -80,15 +80,27 @@ def configure_live_output():
             pass
 
 
+def resolve_task_path(root, target):
+    """解析任务脚本绝对路径并做防越目录校验，返回通过校验的路径。
+
+    两侧都先 ``realpath``（解析 symlink，防符号链接逃逸），比较时再
+    ``normcase``（Windows 大小写归一，避免 ``Root`` vs ``root`` 误判）。
+    """
+    target_path = os.path.abspath(os.path.join(root, target))
+    root_real = os.path.normcase(os.path.realpath(root)) + os.sep
+    if not os.path.normcase(os.path.realpath(target_path)).startswith(root_real):
+        raise SystemExit("task script escapes bundle root: %s" % target)
+    return target_path
+
+
 def run_task(parsed, log=None):
     """在**本进程内**执行解析出来的任务脚本（不再拉起第二个窗口）。"""
     target, rest = parsed
     configure_live_output()
     root = bundle_root()
-    target_path = os.path.abspath(os.path.join(root, target))
-    # 防越目录：任务脚本必须落在 bundle 根目录内（--task=../../x.py 会被拒）。
-    if not target_path.startswith(os.path.abspath(root) + os.sep):
-        raise SystemExit("task script escapes bundle root: %s" % target)
+    # 防越目录：任务脚本必须落在 bundle 根目录内（--task=../../x.py 会被拒，
+    # symlink 指向根外同样会被拒）。
+    target_path = resolve_task_path(root, target)
     if not os.path.isfile(target_path):
         raise SystemExit("task script not found: %s" % target_path)
     sys.path.insert(0, root)

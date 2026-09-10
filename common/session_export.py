@@ -559,8 +559,16 @@ def build_kiro_rs_credentials(record, email=""):
 
 def _write_json_atomic(path, value):
     temporary = f"{path}.tmp-{os.getpid()}-{threading.get_ident()}"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(value, handle, indent=2, ensure_ascii=False)
+    try:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, ensure_ascii=False)
+    except BaseException:
+        # dump 失败（含 Ctrl+C）时清理 .tmp 残片再抛出，目标文件保持原样。
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
     os.replace(temporary, path)
 
 

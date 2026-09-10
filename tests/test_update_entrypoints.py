@@ -66,6 +66,24 @@ class UpdateEntrypointTests(unittest.TestCase):
         # 备份只在健康探测通过后才删除
         self.assertLess(script.index("if (-not $healthy)"), script.index("Remove-Item -LiteralPath $backupDir"))
 
+    def test_portable_updater_merge_overwrites_existing_children(self):
+        """H3 回归锁：回滚 -Merge 时已存在的嵌套 child 也必须复制覆盖。
+
+        否则健康探测 45s 窗口内用户新写入的嵌套文件会在回滚时丢回旧快照。
+        """
+        script = (ROOT / "update-portable.ps1").read_text(encoding="utf-8")
+        # Merge 分支对已存在 child 的覆盖必须走 Copy-Item -Force（用户增量优先）
+        self.assertIn(
+            "Copy-Item -LiteralPath $child.FullName -Destination $dst -Recurse -Force",
+            script,
+            "Merge 时已存在的目录 child 应复制覆盖到父目录",
+        )
+        self.assertIn(
+            "Copy-Item -LiteralPath $child.FullName -Destination $dst -Force",
+            script,
+            "Merge 时已存在的文件 child 应复制覆盖到父目录",
+        )
+
     def test_portable_updater_health_probe_follows_listen_host(self):
         """健康探测地址必须跟随 -ListenHost，通配地址才回落回环。"""
         script = (ROOT / "update-portable.ps1").read_text(encoding="utf-8")

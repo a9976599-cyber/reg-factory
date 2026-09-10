@@ -249,6 +249,7 @@ def _hero_get_code(pkey, max_wait=180, interval=5):
     except Exception:
         pass
     start = time.time()
+    logged = False
     while time.time() - start < max_wait:
         try:
             r = requests.get(HERO_SMS_API_BASE, params={"api_key": HERO_SMS_API_KEY, "action": "getStatus", "id": act_id}, timeout=30)
@@ -260,8 +261,11 @@ def _hero_get_code(pkey, max_wait=180, interval=5):
                 return m.group(0) if m else code
             if text == "STATUS_CANCEL":
                 return None
-        except Exception:
-            pass
+        except Exception as exc:
+            # 与主干 get_code 一致：首次异常打印根因，后续轮询不再刷屏。
+            if not logged:
+                print(f"  [hero-sms] get_code 首次异常: {exc}")
+                logged = True
         print(f"  [hero-sms] waiting... ({int(time.time()-start)}s/{max_wait}s)")
         time.sleep(interval)
     return None
@@ -522,6 +526,7 @@ def _smsman_get_phone(app, country_id="0", max_price="", blacklist=()):
 def _smsman_get_code(pkey, max_wait=180, interval=5):
     req_id = str(pkey).replace("smsman_", "")
     start = time.time()
+    logged = False
     while time.time() - start < max_wait:
         try:
             r = requests.get(_smsman_url("get-sms"), params={"token": SMSMAN_TOKEN, "request_id": req_id}, timeout=30)
@@ -542,8 +547,11 @@ def _smsman_get_code(pkey, max_wait=180, interval=5):
             if ec and ec != "wait_sms":
                 print(f"  [sms-man] get-sms 终止: {ec}")
                 return None
-        except Exception:
-            pass
+        except Exception as exc:
+            # 与主干 get_code 一致：首次异常打印根因，后续轮询不再刷屏。
+            if not logged:
+                print(f"  [sms-man] get_code 首次异常: {exc}")
+                logged = True
         print(f"  [sms-man] waiting... ({int(time.time()-start)}s/{max_wait}s)")
         time.sleep(interval)
     return None

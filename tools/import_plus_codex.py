@@ -393,11 +393,13 @@ async def import_one(index, total, record, playwright, origin, sub2api_token, gr
     return result
 
 
-def load_accounts(accounts_file, delete_input):
-    """读取并解析账号清单。
+def load_accounts(accounts_file, delete_input=False):
+    """读取并解析账号清单（只读，不删除源文件）。
 
-    解析失败（格式错误/重复）时直接抛错，且**不**删除源文件；仅当整批解析成功、
-    且 delete_input 为真时才删除源文件——避免 ``--delete-input`` 把用户账号清单误删。
+    解析失败（格式错误/重复）时直接抛错。``delete_input`` 参数仅为兼容
+    旧签名保留；真正的删除延迟到 :func:`run` 中**整批导入成功之后**由
+    :func:`delete_input_file` 执行——解析成功≠导入成功，中途写库失败时
+    账号清单必须还在，用户才能重跑。
     """
     source_path = Path(accounts_file).expanduser().resolve()
     raw = source_path.read_text(encoding="utf-8-sig")
@@ -405,9 +407,21 @@ def load_accounts(accounts_file, delete_input):
     if errors:
         lines = ", ".join(str(item["line"]) for item in errors[:10])
         raise RuntimeError(f"账号格式错误或重复：第 {lines} 行")
-    if delete_input:
-        source_path.unlink(missing_ok=True)
     return records
+
+
+def delete_input_file(accounts_file):
+    """整批导入全部成功后删除账号清单源文件（--delete-input 语义）。"""
+    Path(accounts_file).expanduser().resolve().unlink(missing_ok=True)
+
+
+def should_delete_input(args, success_count, total_count):
+    """判断是否该删除账号清单：仅整批全部成功且非 dry-run 时删除。"""
+    if getattr(args, "dry_run", False):
+        return False
+    if not getattr(args, "delete_input", False):
+        return False
+    return total_count > 0 and success_count == total_count
 
 
 async def run(args):
@@ -472,6 +486,11 @@ async def run(args):
     print(f"[batch] 结果已写入（不含密码和 token）: {result_path}")
     if output_path:
         print(f"[batch] SUB2API token output: {output_path}")
+    # --delete-input：只在此处（整批导入全部成功后）删除账号清单；
+    # dry-run 在上方早已 return，永远不会走到这里。
+    if should_delete_input(args, success, len(results)):
+        delete_input_file(args.accounts_file)
+        print("[batch] --delete-input: 账号清单已删除")
     return 0 if success == len(results) else 2
 
 
@@ -493,7 +512,8 @@ def build_parser():
     parser.add_argument("--no-import", action="store_true",
                         help="只保存或输出 OAuth 凭据，不创建 SUB2API 账号")
     parser.add_argument("--results", default="", help="结果 JSONL 路径")
-    parser.add_argument("--delete-input", action="store_true")
+    parser.add_argument("--delete-input", action="store_true",
+                        help="整批导入全部成功后删除账号清单文件（解析或导入失败时保留）")
     parser.add_argument("--keep-on-fail", action="store_true")
     parser.add_argument("--allow-non-paid", dest="require_paid", action="store_false")
     parser.add_argument("--dry-run", action="store_true")

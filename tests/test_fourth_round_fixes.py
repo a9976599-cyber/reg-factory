@@ -7,6 +7,8 @@
 - update-portable.ps1 回滚用 -Merge 复制，保留健康探测窗口内写入（P3 边缘丢数据）
 - webui _write_env_file 净化换行，防 .env 注入（P1 配置注入）
 - webui 代理面板/secret 回显掩码（P2 凭证泄露）
+
+第四轮之后的补强（H1-H5）回归锁见 tests/test_hardening_fixes.py。
 """
 
 import os
@@ -39,14 +41,19 @@ class FourthRoundFixTests(unittest.TestCase):
                 "--delete-input 解析失败不应删除源文件",
             )
 
-    def test_load_accounts_deletes_only_after_success(self):
-        """整批解析成功且 delete_input 为真时才删源文件。"""
+    def test_load_accounts_never_deletes_source(self):
+        """load_accounts 只读不删：--delete-input 的删除延迟到整批导入
+        成功之后（由 run 中的 delete_input_file 执行，见 test_hardening_fixes）。"""
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "ok.txt")
             with open(p, "w", encoding="utf-8") as f:
                 f.write("a@b.com----pw123\n")
-            load_accounts(p, delete_input=True)
-            self.assertFalse(os.path.isfile(p), "解析成功应删除源文件")
+            records = load_accounts(p, delete_input=True)
+            self.assertTrue(records, "应解析出账号")
+            self.assertTrue(
+                os.path.isfile(p),
+                "load_accounts 不应删除源文件（删除延迟到整批导入成功后）",
+            )
 
     def test_run_task_rejects_path_escape(self):
         """--task=../../x.py 不得执行 bundle 根目录外的脚本。"""
