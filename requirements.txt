@@ -1,0 +1,11 @@
+playwright
+requests
+Pillow
+aiohttp
+cloakbrowser[geoip]>=0.4.10
+curl_cffi
+cryptography>=42
+Appium-Python-Client>=4.0.0
+selenium>=4.0.0
+fastapi
+uvicorn[standard]
