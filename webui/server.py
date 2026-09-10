@@ -835,6 +835,14 @@ def _has_embedded_creds(value):
 
 _SECRET_KEY_SUBSTR = ("SECRET", "PASSWORD", "TOKEN", "API_KEY")
 
+# 面板对 secret 值的统一回显掩码。保存接口必须把等于掩码的提交值视为
+# 「未修改」，否则一次普通保存就会把字面 "********" 写进 .env 毁掉真实凭证。
+_ENV_MASK = "********"
+
+
+def _is_masked(value) -> bool:
+    return str(value if value is not None else "").strip() == _ENV_MASK
+
 
 def _redact_proxy_config(config):
     """代理面板回显前抹掉凭证类键与内嵌 user:pass，避免被 /aar/ 第三方页 XSS 盗取。"""
@@ -1652,9 +1660,8 @@ async def api_chatgpt_plus_status():
     return _plus_status()
 
 
-@app.post("/api/chatgpt-plus/start")
-async def api_chatgpt_plus_start():
-    return _plus_status()
+# （2026-09）移除死端点 POST /api/chatgpt-plus/start：
+# 前端从不调用，且它并不真正启动 Plus 服务（只回显状态），存在误导。
 
 
 @app.post("/api/chatgpt-plus/import-codex")
@@ -2886,6 +2893,11 @@ async def api_proxy_set(request: Request):
         return JSONResponse({"ok": False, "error": "Invalid JSON request"}, status_code=400)
     incoming = (data or {}).get("config") or {}
     updates = {key: str(incoming.get(key) or "").strip() for key in _PROXY_ENV_KEYS}
+    # 掩码防护：网络面板对 CLASH_SECRET 等凭证键只回显 "********"（_redact_proxy_config）。
+    # 整表保存时未修改的掩码值必须用当前真实值回填，否则字面掩码会覆盖真实凭证。
+    for key in _PROXY_ENV_KEYS:
+        if updates[key] == _ENV_MASK:
+            updates[key] = str(_read_config_val(key, "") or "").strip()
     mode = updates["PROXY_MODE"] or "clash_auto"
     if mode not in {"clash_auto", "clash_fixed", "residential"}:
         return JSONResponse({"ok": False, "error": "不支持的代理模式"}, status_code=400)
@@ -3094,7 +3106,13 @@ async def api_env_set(request: Request):
     updates = data.get("env") or {}
     # 只接受 schema 里声明的 key，避免写入垃圾
     allowed = set(schema.env_keys())
-    updates = {k: _safe_env_value("" if v is None else v) for k, v in updates.items() if k in allowed}
+    # 掩码防护：前端表单对 secret 键回显 "********"；用户没改它就保存时，
+    # 提交上来的仍是掩码字面量 —— 必须视为「未修改」跳过，绝不落盘。
+    updates = {
+        key: _safe_env_value("" if value is None else value)
+        for key, value in updates.items()
+        if key in allowed and not _is_masked(value)
+    }
     if not os.path.isfile(ENV_PATH) and os.path.isfile(ENV_EXAMPLE):
         # 首次保存：以模板为底
         import shutil
@@ -3572,7 +3590,15 @@ try:
     from .aar_bridge import router as aar_router, ensure_aar_running  # noqa: E402
 
     app.include_router(aar_router)
-    _aar_ready = ensure_aar_running()
-    print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
+    _aar_ready = False
+
+    @app.on_event("startup")
+    async def startup_aar_backend():
+        # ensure_aar_running 内部最多同步等待 20s（40 x 0.5s 探活），绝不能放在
+        # import 期执行：无 AAR 环境的机器上整个 WebUI 启动会被白等到超时。
+        # 挪到 startup 事件（线程池）执行；/aar 桥接请求自身也会按需拉起后端。
+        global _aar_ready
+        _aar_ready = await asyncio.to_thread(ensure_aar_running)
+        print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
 except Exception as _aar_exc:  # 融合桥失败不影响主服务
     print(f"[aar-bridge] disabled: {_aar_exc}", flush=True)

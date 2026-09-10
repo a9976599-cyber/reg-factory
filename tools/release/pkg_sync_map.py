@@ -53,6 +53,7 @@ DOCS = [
     "architecture.md",
     "cli.md",
     "configuration.md",
+    "engine-venvs.md",
     "getting-started.md",
     "gmail-android.md",
     "troubleshooting.md",
@@ -66,6 +67,16 @@ DOCS = [
 NEW_LOOSE_MODULES = [
     "common/async_batch.py",
     "common/env_refresh.py",
+]
+
+# 2.3.0 新增：影子加载模块。
+# PYZ 里的 webui.server / common.sms / common.session_export 是官方旧版，
+# 且 PYZ 的 common 是常规包，其 __path__ 在归档内部 —— 仓库侧对这些文件的
+# 修复（掩码回写防护、SMS 异常日志、原子导出等）靠文件覆盖**永远到不了
+# 冻结进程**。wrapper_entry v3 会在官方入口运行前把下列松散文件预注册进
+# sys.modules（影子加载），官方入口随后的 import 全部命中修复版：
+SHADOW_MODULES = [
+    "webui/server.py",
 ]
 
 
@@ -87,6 +98,8 @@ def sync_map():
         m["_internal/tools/" + rel] = "tools/" + rel
     for rel in NEW_LOOSE_MODULES:
         m["_internal/" + rel] = rel
+    for rel in SHADOW_MODULES:
+        m["_internal/" + rel] = rel
     for rel in WEBUI_STATIC:
         m["_internal/webui/static/" + rel] = "webui/static/" + rel
     for rel in DOCS:
@@ -102,6 +115,10 @@ CONTENT_GUARDS = [
     ("_internal/common/async_batch.py", b"def gather_settled"),
     (".env.example", b"OUTLOOK_MANUAL_VERIFY"),
     ("_internal/.env.example", b"CHATGPT2API_URL"),
+    # 2.3.0 影子加载的修复版 webui.server 必须包含掩码回写防护
+    ("_internal/webui/server.py", b"_ENV_MASK"),
+    ("_internal/webui/server.py", b"_is_masked"),
+    ("_internal/webui/server.py", b"startup_aar_backend"),
 ]
 
 # 不得出现在发布物【脚本】里的上游标识。

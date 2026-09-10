@@ -294,8 +294,11 @@ try {
     if (-not $healthy) {
         throw "Updated WebUI did not report version $targetVersion at $statusUrl"
     }
-    Remove-Item -LiteralPath $backupDir -Recurse -Force
+    # 先解除回滚标记、再清理备份：备份删除失败（文件被占用等）绝不能把一次
+    # 已通过健康探测的成功更新回滚掉。残留的 .reg-factory-backup-* 目录无碍，
+    # 用户可手动删除。
     $movedOld = $false
+    Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue
     $message = "Updated: v$currentVersion -> v$targetVersion"
     Write-UpdateResult -Status "completed" -Message $message -CurrentVersion $currentVersion -TargetVersion $targetVersion
     Write-Output $message

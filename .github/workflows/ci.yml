@@ -46,4 +46,6 @@ jobs:
             test_task_dispatch \
             test_env_catalog \
             test_webui_tour \
-            test_release_artifact_map
+            test_release_artifact_map \
+            test_update_entrypoints \
+            test_wrapper_shadow_modules

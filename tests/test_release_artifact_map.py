@@ -25,15 +25,24 @@ class ReleaseArtifactMapTests(unittest.TestCase):
     def test_sync_map_covers_the_loose_layer_only(self):
         """同步表只能包含「文件覆盖能生效」的路径。
 
-        应用主体（config / common.* / webui.server 等）在 exe 内嵌归档里，丢文件进去
-        不会生效 —— 把它们写进同步表会给出虚假的安全感，所以显式禁掉。
+        应用主体（config / common.sms / webui.aar_bridge 等）在 exe 内嵌归档里，
+        丢文件进去不会生效 —— 把它们写进同步表会给出虚假的安全感，所以显式禁掉。
+        例外：`_internal/webui/server.py` 由 wrapper_entry v3 影子加载（见
+        tests/test_wrapper_shadow_modules.py），文件覆盖经由 sys.modules 预注册生效。
         """
         allowed_common = {
             "_internal/common/async_batch.py",
             "_internal/common/env_refresh.py",
         }
+        # 影子加载名单（必须与 tools/binary_patch/wrapper_entry.py 的
+        # _RF_SHADOW_MODULES 一致；webui/server.py 同时也在同步表）
+        shadow_loaded = {
+            "_internal/webui/server.py",
+        }
         offenders = []
         for arc in pkg_sync_map.sync_map():
+            if arc in shadow_loaded:
+                continue
             if arc.startswith("_internal/common/") and arc not in allowed_common:
                 offenders.append(arc)
             elif arc.startswith("_internal/webui/") and not arc.startswith(

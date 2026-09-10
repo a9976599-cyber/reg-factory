@@ -91,6 +91,19 @@ class UpdateEntrypointTests(unittest.TestCase):
         self.assertIn("$probeHost = $ListenHost", script)
         self.assertIn('$probeHost -eq "0.0.0.0"', script)
 
+    def test_portable_updater_backup_cleanup_failure_does_not_rollback(self):
+        """回归锁：备份目录清理失败不得回滚一次已通过健康探测的成功更新。"""
+        script = (ROOT / "update-portable.ps1").read_text(encoding="utf-8")
+        # 回滚标记必须在备份删除之前复位（成功路径尾部那次复位不算，
+        # 那时 Remove-Item 已经抛过了），且删除失败要静默不抛。
+        cleanup = script.index("Remove-Item -LiteralPath $backupDir")
+        reset = script.rindex("$movedOld = $false", 0, cleanup)
+        self.assertLess(reset, cleanup)
+        self.assertIn(
+            "Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue",
+            script,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

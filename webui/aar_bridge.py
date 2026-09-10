@@ -55,6 +55,20 @@ def _log(msg: str) -> None:
     print(f"[aar-bridge] {msg}", flush=True)
 
 
+def _open_backend_log(root: Path, name: str):
+    """后端子进程 stdout/stderr 落盘（append），替代 DEVNULL 静默。
+
+    此前后端日志全被丢弃，AAR/OAR 启动失败只能靠猜；现在写到
+    <engine>/logs/<name>.log。打不开日志文件就退回 DEVNULL，不影响拉起。
+    """
+    try:
+        log_dir = root / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return open(log_dir / f"{name}.log", "ab")
+    except Exception:  # pragma: no cover
+        return subprocess.DEVNULL
+
+
 def is_aar_alive() -> bool:
     try:
         r = _get_health_client().get("/api/auth/check")
@@ -171,8 +185,8 @@ def ensure_aar_running() -> bool:
                 [str(AAR_PY), "main.py"],
                 cwd=str(AAR_ROOT),
                 env=ensure_data_dir(env),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=_open_backend_log(AAR_ROOT, "aar-backend"),
+                stderr=subprocess.STDOUT,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except Exception as exc:  # pragma: no cover
@@ -236,8 +250,8 @@ def ensure_oar_running() -> bool:
                 [str(OAR_PY), "-m", "uvicorn", "webapp.server:app",
                  "--host", "127.0.0.1", "--port", str(OAR_PORT)],
                 cwd=str(OAR_ROOT),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=_open_backend_log(OAR_ROOT, "oar-backend"),
+                stderr=subprocess.STDOUT,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except Exception as exc:  # pragma: no cover
@@ -416,7 +430,12 @@ async def aar_static_files(path: str):
     if path.startswith("static/"):
         path = path[len("static/"):]
     target = (AAR_STATIC / path).resolve()
-    if not str(target).startswith(str(AAR_STATIC.resolve())):
+    # 目录逃逸检查：resolve 后必须仍位于 AAR_STATIC 内。startswith 前缀比较
+    # 会放过兄弟目录（..\\aar-static-evil 同样以 aar-static 开头），
+    # 这里用 normcase+os.sep 对齐 Windows 大小写/分隔符语义。
+    static_real = os.path.normcase(os.path.realpath(str(AAR_STATIC)))
+    target_real = os.path.normcase(os.path.realpath(str(target)))
+    if target_real != static_real and not target_real.startswith(static_real + os.sep):
         return JSONResponse({"error": "forbidden"}, status_code=403)
     if target.is_file():
         return FileResponse(target)

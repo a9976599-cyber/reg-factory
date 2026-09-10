@@ -1,4 +1,61 @@
-﻿# 更新日志
+﻿## 2.3.0（2026-09-11）— 第五轮审计：修复「修复从未送达」的结构性缺口
+
+本轮审计发现的最重要问题不是某个 bug，而是**交付链路的结构性缺陷**：
+PYZ 里的 `webui.server` / `common.sms` / `common.session_export` 是官方旧版，
+且 PYZ 的 `common` 是常规包（`__path__` 在归档内部），松散修复文件被整体遮蔽 ——
+前几轮落在这些文件的修复（掩码、净化、原子写、异常日志）在所有已发布包里**从未生效**。
+
+### 交付机制（根治）
+
+- **[P1] 入口影子加载（wrapper_entry v3）**：入口补丁升级，在官方入口运行前把
+  `_internal/webui/server.py`、`_internal/common/{sms,session_export,env_refresh,async_batch}.py`、
+  `_internal/task_dispatch.py` 预注册进 `sys.modules`；任一加载失败自动回退官方版本并记日志。
+  此后仓库对这些文件的修复可直达冻结进程。
+- **[P1] 掩码回写毁配置（真凶）**：2.2.9 面板对 secret 键只回显 `********`，但
+  `/api/env` 与 `/api/proxy` 保存时把整表提交原样落盘 —— 用户改任意一项保存，
+  全部真实凭证被字面掩码覆盖（「配置老是坏」「授权丢失」的直接元凶）。
+  现在掩码值一律视为「未修改」：`/api/env` 跳过，`/api/proxy` 用当前真实值回填。
+- **[P2] AAR 拉起阻塞启动**：`ensure_aar_running`（最多同步等 20s）从 import 期挪到
+  startup 事件；无 AAR 环境的机器不再白等。
+- **[P2] 更新器回滚误伤**：备份目录清理失败（文件被占用）会把一次已通过健康探测的
+  成功更新整体回滚。现先解除回滚标记再清理，清理失败静默。
+- **[P2] --task 逃逸**：入口补丁版目标路径补 realpath+normcase 包含检查。
+- **[P3] aar_bridge**：`/aar/{path}` 目录逃逸检查改 normcase+realpath 包含语义；
+  AAR/OAR 子进程日志落盘 `<engine>/logs/*.log`（原先 DEVNULL 全丢）。
+- **[P3] 移除死端点** `POST /api/chatgpt-plus/start`（前端不调用且不真正启动）。
+- **[P3] 根目录裸 `pytest` 崩溃**：gmail_android 的 `config.py` 遮蔽根 `config.py`
+  导致收集失败。新增根 `pytest.ini`（testpaths=tests）。
+- **[P3] AAR 子进程环境同步**：captured env 无锁并发写 dict（CPython GIL 下无害但未定义），
+  已加锁。子进程退出后 `_proc.wait()` 收割，避免僵尸句柄。
+
+### 引擎修复（engine/aar + engine/oar，随包直达）
+
+- **[P1] oar 代理池锁饿死**：`check_proxies` 持全局锁做每条 15s 的网络预检，
+  期间注册/救援的代理解析与统计全部挂起。改为锁内快照 → 锁外并发检测 → 锁内回写。
+- **[P1] oar 凭据明文导出无鉴权**：`/api/accounts/export`（GET+POST）任意可达，可拖走全部
+  账号 combo。现加导出守卫：配置 `OAR_API_KEY` 后必须携带匹配 `X-API-Key`，未配置时仅允许
+  本机回环调用（控制台自身页面为本机访问，不受影响）；启动说明与 README 的 `--host 0.0.0.0`
+  建议全部改为 127.0.0.1 或带鉴权反代。
+- **[P2] oar 数据库双重初始化竞态**：迁移流程整体移入锁内，rescue_events 重复 INSERT 消除。
+- **[P2] oar 任务环境变量互踩**：救援/注册并发改写进程级 `os.environ`（PX_SOLVER、
+  CAPTCHA_RUN_API_KEY 等）导致用错打码方式。改为任务级参数显式传递 + `_env_lock` 互斥兜底。
+- **[P2] aar 明文密码当 token**：登录返回 `token=password` 且 `==` 比较。改为
+  `secrets.token_urlsafe(32)` 会话 token（12h 过期）+ `hmac.compare_digest`。
+- **[P3] aar scheduler**：`stop()` 不响应 `sleep(3600)` 改 Event.wait；静默 except 加日志。
+- **[P3] oar proxy_utils**：删除函数属性 `_last_ip_info` 跨线程传 IP 归属（张冠李戴）。
+
+### 已知遗留（评估后本轮不改）
+
+- oar `Job._queue` 无界、`_jobs` 不清理（长跑内存缓慢增长，修复涉及 SSE 语义）。
+- aar `save_account` check-then-insert 无唯一约束（加约束需迁移现有库，有重复行风险）。
+- oar `register_batch` 与 `register_batch_iter` 双实现（实际调用只走 iter 版）。
+- `/api/assets/mailbox-inventory` 无 key 时限本机开放（面板 UX 依赖此语义，UI 已明示）。
+
+测试：新增 `tests/test_wrapper_shadow_modules.py`（影子机制回归锁）、
+`tests/test_webui_mask_guard.py`（掩码回写防护，TestClient 实测 /api/env 与 /api/proxy）、
+`test_update_entrypoints.py` 增备份清理回归锁；CI 静态测试组补 2 项；全量 663+ 绿。
+
+# 更新日志
 
 ## 2.2.9（2026-09-11）— 第四轮全项目审计修复 + 团队 SOP 加固
 
