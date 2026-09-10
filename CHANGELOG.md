@@ -1,5 +1,57 @@
 ﻿# 更新日志
 
+## 2026-09-11 - 2.2.8
+
+**交付物同步版（让用户下载到的包真的包含 2.2.7 的修复）**
+
+2.2.7 的 14 项修复全部停在仓库里，便携包里一个都没有 —— 仓库绿、发布包旧。
+本版先查清冻结包的加载机制，再把**所有能靠文件覆盖生效**的交付面同步到仓库版本，
+并把这件事变成可执行的断言，避免第三次发生。
+
+### 为什么 2.2.7 的包「名不副实」
+
+对官方冻结包实测（在冻结进程内打印模块来源）确认了加载路径分三层：
+
+| 层 | 模块 | 加载方式 | 能否用丢文件修 |
+|---|---|---|---|
+| 应用主体 | `config` / `common.*` / `webui.*` | `PyiFrozenLoader`，来自 exe 内嵌归档（`__file__` 是**合成**路径，`isfile=False`） | ❌ 不行 |
+| 任务脚本 | `_internal/*.py`、`_internal/tools/*.py` | 真实松散文件，`runpy` 直接执行 | ✅ 可以 |
+| 运行时数据 | `_internal/webui/static/*`、`update-portable.ps1`、`.env.example` | 冻结代码用 `open()` 从磁盘读 | ✅ 可以 |
+
+2.2.7 的打包脚本只覆盖了 `VERSION` 与 `CHANGELOG`，所以 `index.html` 里
+`btn-guide` 计数为 0（新手指南仍打不开）、内置更新器第 91 行仍指向上游仓库 ——
+都和官方 2.2.4 逐字节相同。
+
+### 本版同步的内容
+
+- **WebUI 静态资源**：`webui/static/{index.html,app.js,style.css,oar_page.js}`
+  同步为仓库版本（新手指南入口 `#btn-guide`、首次自动打开、完成标记随之生效）。
+- **内置一键更新器** `_internal/update-portable.ps1`：改为指向本分支仓库。
+- **`.env.example` / `_internal/.env.example`**：补齐 7 个界面可编辑但模板漏列的键。
+- **11 个任务脚本**同步为仓库版本：`register*.py`、`unlock_outlook.py`、
+  `outlook_reg_loop.py`、`tools/import_plus_codex.py` 等（含 `gather_settled`
+  异常隔离、`with open()` 句柄修复）。
+- **新增松散子模块** `common/async_batch.py`（任务脚本 `from common.async_batch
+  import gather_settled` 的落点）与 `common/env_refresh.py`。
+- **`docs/*.md` 与 `README.md`**：仓库名等修正同步到包内。
+
+同步前已在冻结进程内做过依赖校验：仓库版任务脚本引用的 41 个 `config` 常量与全部
+`common.*` 属性，在 2.2.4 冻结归档里都存在，覆盖不会引入新的 `AttributeError`。
+
+### 新增发布物断言
+
+`tools/release/assert_release_artifact.py` 把「包内文件 == 仓库源码」写成可执行断言
+（含 `btn-guide`、更新器仓库名、`.env.example` 键、无 `.env`/授权缓存、
+无 `tiantianGPU` 残留等护栏），打包器在与断言共用同一张同步表，缺项即拒绝出包。
+此前 621 个单测全部跑在源码树上，没有一条检查用户实际下载的那个 zip —— 这正是
+2.2.7 翻车的直接原因。
+
+### 边界说明
+
+应用主体（`config` / `common.*` / `webui.server`）位于 exe 内嵌归档，且官方冻结构建
+带闭源授权子系统（`ysq_auth` / `yunshouquan_sdk`），无法靠文件覆盖更新。这部分
+2.2.7 的改动（配置热更新、`open()` 句柄）需重建归档才能进入便携包，本版不动。
+
 ## 2026-09-11 - 2.2.7
 
 **全量缺陷修复版（发布链路 / 任务派发 / 指南入口 / 健壮性）**
