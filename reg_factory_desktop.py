@@ -8,8 +8,15 @@
   保证双击一定有窗口弹出，不会“没反应 / 30 秒后悄悄退出”。
 - 任何失败都写日志文件（exe 同目录 reg-factory-desktop.log，不可写则退 %TEMP%），
   并弹 MessageBox 提示，而不是静默退出。
+
+任务派发：
+- WebUI（`/api/run`）会通过 `_build_cmd` 用 `[exe, "-u", "--task", "outlook_reg_loop.py", ...]`
+  把任务子进程反向唤起本 exe，让 frozen bootloader 把命令行路由到对应脚本（而不是再开一个
+  控制台窗口 / uvicorn 实例）。本入口必须先识别 `--task` 再决定走哪条路径，否则就会
+  出现「点运行任务 → 又开一个控制台窗口 → 任务没启动」的现象（v2.0.8 的回归）。
 """
 import os
+import runpy
 import socket
 import sys
 import threading
@@ -18,6 +25,7 @@ import traceback
 
 DEFAULT_PORT = int(os.environ.get("REG_FACTORY_PORT", "8799"))
 LOG_PATH = None
+_TASK_DISPATCH = False
 
 
 def log(msg):
@@ -119,7 +127,66 @@ def wait_for_backend(port, timeout=40):
     return False
 
 
+def _configure_live_output():
+    """WebUI 通过 stdout pipe 实时回显任务输出；强制行缓冲避免批量打印。"""
+    os.environ["PYTHONUNBUFFERED"] = "1"
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if not callable(reconfigure):
+            continue
+        try:
+            reconfigure(line_buffering=True, write_through=True)
+        except (OSError, ValueError):
+            pass
+
+
+def _dispatch_task(raw_args):
+    """如果命令行是 `reg-factory.exe -u --task X.py ...`，直接跑 X.py 并返回 True。
+
+    与上游 2.2.4 的 `scripts/reg-factory-server.py` 同形协议，保证 WebUI `_build_cmd`
+    的 frozen 模式构造的命令行能直接落地。
+    """
+    global _TASK_DISPATCH
+    if not raw_args:
+        return False
+    head = raw_args[0]
+    if head == "--task":
+        if len(raw_args) < 2:
+            return False
+        target = raw_args[1]
+        arg_offset = 2
+    elif head.lower().endswith(".py"):
+        target = head
+        arg_offset = 1
+    else:
+        return False
+    _TASK_DISPATCH = True
+    _configure_live_output()
+    if getattr(sys, "frozen", False):
+        # PyInstaller onedir 形态：解压后的临时目录包含全部 .py 任务
+        bundle_root = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        bundle_root = os.path.dirname(os.path.abspath(__file__))
+    target_path = os.path.join(bundle_root, target)
+    if not os.path.isfile(target_path):
+        raise SystemExit(f"task script not found: {target_path}")
+    sys.path.insert(0, bundle_root)
+    sys.argv = [target_path, *raw_args[arg_offset:]]
+    log(f"task dispatch → {target_path} argv={sys.argv[1:]}")
+    runpy.run_path(target_path, run_name="__main__")
+    return True
+
+
 def main():
+    global _TASK_DISPATCH
+
+    # ---- TASK DISPATCH 必须在 uvicorn/webview 之前 ----
+    raw_args = list(sys.argv[1:])
+    if raw_args[:1] == ["-u"]:
+        raw_args = raw_args[1:]
+    if _dispatch_task(raw_args):
+        return
+
     setup_log()
     log(f"=== reg-factory desktop start pid={os.getpid()} ===")
 
