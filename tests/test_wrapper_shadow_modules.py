@@ -42,9 +42,21 @@ class WrapperShadowModuleTests(unittest.TestCase):
             "common.session_export",
             "common.env_refresh",
             "common.async_batch",
+            "webui.embedded_backends",
             "webui.server",
         ):
             self.assertIn(required, pairs, "影子清单缺少 %s" % required)
+
+    def test_embedded_backends_shadows_before_webui_server(self):
+        value = self._find_tuple_of_pairs("_RF_SHADOW_MODULES")
+        order = [
+            pair.elts[0].value if not isinstance(pair, ast.Call) else pair.args[0].value
+            for pair in value.elts
+        ]
+        self.assertLess(
+            order.index("webui.embedded_backends"), order.index("webui.server"),
+            "embedded_backends 会被 webui.server import，必须早于它加载",
+        )
 
     def test_webui_server_shadows_after_its_loose_dependencies(self):
         value = self._find_tuple_of_pairs("_RF_SHADOW_MODULES")

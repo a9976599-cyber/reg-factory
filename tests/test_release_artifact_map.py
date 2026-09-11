@@ -39,6 +39,7 @@ class ReleaseArtifactMapTests(unittest.TestCase):
         # 影子加载名单（必须与 tools/binary_patch/wrapper_entry.py 的
         # _RF_SHADOW_MODULES 一致；webui/server.py 同时也在同步表）
         shadow_loaded = {
+            "_internal/webui/embedded_backends.py",
             "_internal/webui/server.py",
         }
         offenders = []

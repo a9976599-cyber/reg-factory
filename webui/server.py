@@ -3596,9 +3596,10 @@ try:
     async def startup_aar_backend():
         global _aar_ready
         # frozen 便携包：同进程内嵌 engine/aar + engine/oar（:8000/:8890），
-        # 恢复旧版「开机即监听」行为（embedded_backends 只存在于官方 PYZ，
-        # 源码模式没有该模块 → no-op）。必须在 ensure_aar_running 之前执行，
-        # 这样内嵌 A 起来后 aar_bridge 的 venv 拉起会直接跳过。
+        # 恢复旧版「开机即监听」行为（2.3.2 起 embedded_backends 有仓库影子
+        # 修复版：并行后台启动不阻塞本事件；源码模式没有 engine/ 目录 →
+        # no-op）。必须在 ensure_aar_running 之前执行，这样内嵌 A 起来后
+        # aar_bridge 的 venv 拉起会直接跳过。
         try:
             from webui import embedded_backends  # noqa: F401 - 仅 frozen 存在
 

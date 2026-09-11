@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""reg_factory_desktop —— 补丁版入口脚本（源码形态，v3）。
+"""reg_factory_desktop —— 补丁版入口脚本（源码形态，v4）。
 
 用途
 ----
@@ -24,6 +24,11 @@ v1/v2 只补了 CLI 派发。v3 追加两个关键能力：
    任务脚本必须是 bundle 根内的真实路径（realpath + normcase 对齐
    Windows 大小写/分隔符），堵住 ``..\\..\\evil.py`` 与符号链接逃逸。
 
+v4 追加：把 ``webui.embedded_backends`` 纳入影子清单 —— 官方 PYZ 版的
+30s 启动看门狗会误杀全新解压包里 OAR 的长冷编译（无 pyc + 杀软扫描，
+实测 >100s），且串行等待会把主面板启动拖住 30-60s；影子修复版改为
+并行后台启动 + 180s 看门狗 + status() 懒重试（详见该模块 docstring）。
+
 * 其它情况：把官方入口的 code object 原样 ``exec`` 进 ``__main__``，
   授权校验、内嵌后端、WebUI + webview 全部走官方原路径，不做任何改动。
 
@@ -45,13 +50,15 @@ import sys
 _RF_ORIG = "__RF_ORIG_CODE__"
 
 # (PYZ/包内模块名, 相对 bundle 根的松散文件路径)
-# 顺序即加载顺序：webui.server 依赖 env_refresh/async_batch，必须排最后。
+# 顺序即加载顺序：webui.server 依赖 env_refresh/async_batch，必须排最后；
+# embedded_backends 独立于 server，但 aar_bridge/server 会 import 它，排前面。
 _RF_SHADOW_MODULES = (
     ("task_dispatch", "task_dispatch.py"),
     ("common.sms", "common/sms.py"),
     ("common.session_export", "common/session_export.py"),
     ("common.env_refresh", "common/env_refresh.py"),
     ("common.async_batch", "common/async_batch.py"),
+    ("webui.embedded_backends", "webui/embedded_backends.py"),
     ("webui.server", "webui/server.py"),
 )
 

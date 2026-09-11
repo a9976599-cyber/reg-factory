@@ -79,7 +79,11 @@ NEW_LOOSE_MODULES = [
 # 修复（掩码回写防护、SMS 异常日志、原子导出等）靠文件覆盖**永远到不了
 # 冻结进程**。wrapper_entry v3 会在官方入口运行前把下列松散文件预注册进
 # sys.modules（影子加载），官方入口随后的 import 全部命中修复版：
+# 2.3.2 新增：webui/embedded_backends.py —— 官方版 30s 看门狗误杀全新解压包
+# 的 OAR 长冷编译（无 pyc + 杀软扫描，实测 >100s），且串行等待把主面板启动
+# 拖住 30-60s；影子修复版并行后台启动 + 180s 看门狗 + status() 懒重试。
 SHADOW_MODULES = [
+    "webui/embedded_backends.py",
     "webui/server.py",
 ]
 
@@ -129,6 +133,11 @@ CONTENT_GUARDS = [
     ("_internal/webui/server.py", b"/api/auth/machine-code"),
     ("_internal/webui/server.py", b"_expiry_parts"),
     ("_internal/webui/server.py", b"_FEATURE_ENGINE_PREFIXES"),
+    # 2.3.2：影子版 embedded_backends 必须是 v4（并行启动+懒重试），丢了 =
+    # 全新解压包首次启动 O 注册台被 30s 看门狗误杀、面板被拖住半分钟
+    ("_internal/webui/embedded_backends.py", b"_WATCHDOG_SECONDS"),
+    ("_internal/webui/embedded_backends.py", b"_lazy_retry_engines"),
+    ("_internal/webui/embedded_backends.py", b"def try_start_embedded"),
 ]
 
 # 不得出现在发布物【脚本】里的上游标识。
