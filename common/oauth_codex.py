@@ -27,6 +27,7 @@ from urllib.parse import urlparse, parse_qs, urlencode
 
 import requests
 
+from common.async_io import to_thread
 from common.uploaders import _origin, _sub2api_request, DEFAULT_TIMEOUT
 
 if sys.platform == "win32":
@@ -650,7 +651,7 @@ async def handle_add_phone(
                 sms.release(pkey)
                 continue
             code_task = asyncio.create_task(
-                asyncio.to_thread(sms.get_code, pkey, max_wait=sms_timeout)
+                to_thread(sms.get_code, pkey, max_wait=sms_timeout)
             )
             delivery_failed = False
             while not code_task.done():
@@ -660,7 +661,7 @@ async def handle_add_phone(
                 if _is_phone_flow_url(page.url) and await _has_phone_error(page):
                     print("  [add-phone] SMS 发送失败或已切换 WhatsApp，立即换号")
                     delivery_failed = True
-                    await asyncio.to_thread(sms.release, pkey)
+                    await to_thread(sms.release, pkey)
                     break
             code = await code_task
             if delivery_failed:

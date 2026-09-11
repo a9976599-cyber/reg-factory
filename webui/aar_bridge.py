@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import httpx
+from common.async_io import to_thread
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
@@ -417,7 +418,9 @@ async def aar_desktop_health():
 @router.get("/aar")
 async def aar_index():
     """入口：/aar → 他的原版 React 界面."""
-    ensure_aar_running()
+    # T8: ensure_aar_running 在内部轮询 10086 端口,内部多次 time.sleep —
+    # 不再直接 await,改走 to_thread。
+    await to_thread(ensure_aar_running)
     idx = AAR_STATIC / "index.html"
     if not idx.exists():
         return JSONResponse({"error": "AAR static not built"}, status_code=404)

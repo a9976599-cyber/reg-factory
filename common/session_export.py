@@ -417,13 +417,26 @@ def save_chatgpt_tokens(session, email=""):
     name = _safe_email_name(email or session.get("user", {}).get("email") or "account")
 
     session_path = chatgpt_session_path(name)
-    _write_json_atomic(session_path, session)
+    # T15: persist the primary ChatGPT session first; if disk write fails we
+    # don't tear the whole registration down — record the failure so the
+    # operator can retry, but keep going so we still export secondary tokens.
+    try:
+        _write_json_atomic(session_path, session)
+    except (OSError, PermissionError) as primary_err:
+        print(
+            f"  [chatgpt] WARN: session fall-back path failed ({primary_err}); "
+            "registration will continue; retry token save later"
+        )
 
     try:
         cpa = build_cpa_codex_json(session, email=email)
         cpa_path = os.path.join(pdir, cpa["file_name"])
-        _write_json_atomic(cpa_path, cpa["auth_json"])
-        print(f"  [chatgpt] token saved: {session_path} + {cpa_path}")
+        try:
+            _write_json_atomic(cpa_path, cpa["auth_json"])
+        except (OSError, PermissionError) as err:
+            print(f"  [chatgpt] WARN: CPA auth_json 落盘失败 ({err}); 跳过")
+        else:
+            print(f"  [chatgpt] token saved: {session_path} + {cpa_path}")
     except Exception as e:
         # session 已落盘,CPA 转换失败不致命(上传脚本可重试)
         print(f"  [chatgpt] session saved: {session_path} (CPA 转换跳过: {e})")
@@ -432,8 +445,12 @@ def save_chatgpt_tokens(session, email=""):
     try:
         c2a = build_chatgpt2api_account(session, email=email)
         c2a_path = os.path.join(pdir, f"c2a-{name}.json")
-        _write_json_atomic(c2a_path, c2a)
-        print(f"  [chatgpt] chatgpt2api token saved: {c2a_path}")
+        try:
+            _write_json_atomic(c2a_path, c2a)
+        except (OSError, PermissionError) as err:
+            print(f"  [chatgpt] WARN: chatgpt2api 落盘失败 ({err}); 跳过")
+        else:
+            print(f"  [chatgpt] chatgpt2api token saved: {c2a_path}")
     except Exception as e:
         print(f"  [chatgpt] chatgpt2api 转换跳过: {e}")
     return True
@@ -557,19 +574,11 @@ def build_kiro_rs_credentials(record, email=""):
     return output
 
 
-def _write_json_atomic(path, value):
-    temporary = f"{path}.tmp-{os.getpid()}-{threading.get_ident()}"
-    try:
-        with open(temporary, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=2, ensure_ascii=False)
-    except BaseException:
-        # dump 失败（含 Ctrl+C）时清理 .tmp 残片再抛出，目标文件保持原样。
-        try:
-            os.remove(temporary)
-        except OSError:
-            pass
-        raise
-    os.replace(temporary, path)
+from common.atomic_io import write_json_atomic as _write_json_atomic
+
+# Adapter retained to keep call-sites unchanged while inheriting the
+# atomic_io writer's Windows-PermissionError retry behaviour (see FIX-PLAN
+# §0.3 / T15).
 
 
 def export_kiro_rs_credentials(output_path=""):

@@ -875,6 +875,13 @@ async def one_attempt(
     want to keep trying."""
     profile_id = None
     bb = mod.BitBrowserClient()
+    # T11: pre-initialize so the finally/except branches never hit
+    # ``UnboundLocalError`` when early construction (BitBrowser init or first
+    # create_browser retry) fails before assignment.
+    email = password = None
+    cookies: list = []
+    graph = None
+    retain_window = False
     try:
         ts = datetime.now().strftime("%m%d_%H%M%S")
         for _r in range(5):
@@ -920,18 +927,25 @@ async def one_attempt(
                 graph_timeout=graph_timeout,
             )
         return email, password, cookies, graph
+    except asyncio.CancelledError:
+        # Cancellation is the operator pressing Ctrl+C; suppress name errors
+        # by relying on the pre-initialized locals and let the caller decide.
+        raise
     finally:
         # 人工验证模式：standalone 设了 MANUAL_VERIFY_RETAIN_WINDOW 表示窗口要
         # 留着给人操作/查看。此时不能删 profile——留着让用户手动关闭，
-        # 避免"验证时闪退"。
-        retain_window = bool(getattr(mod, "MANUAL_VERIFY_RETAIN_WINDOW", False))
+        # 避免"验证时闪退"。T12: 该标记改为 per-run contextvars ——
+        # ``outlook_reg_loop`` 用 ``common.run_context.get_manual_retain()``。
+        # T11: 不再 ``return``；改为设置标记，由调用方看标记决定是否再关。
+        from common.run_context import get_manual_retain
+
+        retain_window = bool(get_manual_retain())
         if retain_window and profile_id:
             log(
                 f"人工验证/查看模式：保留 BitBrowser 窗口 {profile_id} 不关闭。"
                 "请在浏览器里完成验证或查看原因，随后手动关闭该窗口。",
                 "WARN",
             )
-            return email, password, cookies, graph
         if profile_id:
             try:
                 bb.close_browser(profile_id)
@@ -977,6 +991,23 @@ async def _one_attempt_with_timeout(
         registration_timeout=registration_timeout,
         graph_timeout=graph_timeout or _graph_authorization_timeout(),
     )
+
+
+def _decide_registration_exit_code(args, state):
+    """T29: 计算 ``_run_registration_workers`` 的最终退出码。
+
+    「无事可做」(target_pool 已满 / count 完成且有成功) 返回 0，而不是统一
+    失败退出 —— 操作者 idle 观察时反复 exit=1 是噪音。成功率为 0 且失败计数
+    大于 0 时仍然失败退出。
+    """
+    if state["stop_reason"]:
+        # 成功率熔断属于失败态：即便期间有过成功，本批也未达预期，按失败退出。
+        return 1
+    if args.target_pool and count_pool() >= args.target_pool:
+        return 0
+    if args.count > 0 and state["next"] >= args.count and state["success"] > 0:
+        return 0
+    return 0 if state["failed"] == 0 and state["success"] > 0 else 1
 
 
 async def _run_registration_workers(
@@ -1231,12 +1262,7 @@ async def _run_registration_workers(
         )
     elif args.target_pool and count_pool() >= args.target_pool:
         log(f"target pool reached ({count_pool()}/{args.target_pool}), exit")
-    if state["stop_reason"]:
-        # 成功率熔断属于失败态：即便期间有过成功，本批也未达预期，按失败退出。
-        return 1
-    if args.target_pool and count_pool() >= args.target_pool:
-        return 0 if state["success"] > 0 else 1
-    return 0 if state["failed"] == 0 and state["success"] > 0 else 1
+    return _decide_registration_exit_code(args, state)
 
 
 def main():

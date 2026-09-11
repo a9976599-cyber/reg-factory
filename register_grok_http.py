@@ -320,7 +320,15 @@ def register_one(index, total, sub2api=False, sub2api_group="", mailbox_attempts
             email,
             authorization_status="pending" if sub2api else "not_requested",
         )
-        print(f"  [OK] grok sso token 已保存  email={email} pw={password}")
+        # T26: 不要把 password 明文打到 stdout/log。这里仅输出 masking 后的 email。
+        try:
+            local_part, _, domain = email.partition("@")
+            masked_email = (local_part[:3] + "***") if local_part else "***"
+            if domain:
+                masked_email = f"{masked_email}@{domain}"
+        except Exception:
+            masked_email = "***"
+        print(f"  [OK] grok sso token 已保存  account={masked_email}")
         if sub2api:
             from common.uploaders import upload_sub2api_grok
 

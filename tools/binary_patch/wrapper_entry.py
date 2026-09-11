@@ -155,14 +155,20 @@ def _rf_parse_task(raw_args):
 
 
 def _rf_safe_task_path(bundle_root, target):
-    """任务脚本必须落在 bundle 根内（realpath + normcase 防逃逸）。"""
-    root_real = os.path.normcase(os.path.realpath(bundle_root))
-    target_real = os.path.normcase(
-        os.path.realpath(os.path.join(bundle_root, target))
-    )
-    if target_real != root_real and not target_real.startswith(root_real + os.sep):
-        raise SystemExit("task script outside bundle root: %s" % target)
-    return target_real
+    """任务脚本必须落在 bundle 根内。
+
+    T34: 与 ``task_dispatch.py`` 共享 ``common.path_guard.safe_join_under``,
+    避免两份实现在 realpath / normcase 规则上漂移导致安全测试不可知结果。
+    任何 (look-alike) sibling 目录攻击(``reg_factory_evil`` 前缀匹配等)
+    会被前缀 + sep 严格判定拦截。
+    """
+    from common.path_guard import safe_join_under
+
+    try:
+        candidate = os.path.join(bundle_root, target)
+        return safe_join_under(bundle_root, candidate)
+    except ValueError as exc:
+        raise SystemExit(f"task script outside bundle root: {target} ({exc})") from exc
 
 
 def _rf_dispatch_task(raw_args):

@@ -20,8 +20,10 @@ from playwright.async_api import async_playwright
 from bitbrowser import BitBrowser
 
 INPUT_FILE = sys.argv[1] if len(sys.argv) > 1 else "cookies/accounts-3.24.txt"
-OUTPUT_VALID = INPUT_FILE.replace(".txt", "_valid.txt")
-OUTPUT_INVALID = INPUT_FILE.replace(".txt", "_invalid.txt")
+# T24: 默认输出名加 .validated 前缀避免覆盖输入。``--output`` 可显式指定;
+# 同时也兜底一次,即使显式给到与输入同名也强制改名。
+OUTPUT_VALID = INPUT_FILE.replace(".txt", ".validated.txt")
+OUTPUT_INVALID = INPUT_FILE.replace(".txt", ".invalid.txt")
 
 
 def validation_browser_options():

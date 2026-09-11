@@ -9,12 +9,20 @@ if ($Action -notin @("install", "start", "update")) {
 
 $InstallDir = $env:REG_FACTORY_DIR
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
-    try {
-        $running = Invoke-RestMethod -Uri "http://127.0.0.1:8799/api/status" -TimeoutSec 3
-        if ($running.root -and (Test-Path $running.root)) {
-            $InstallDir = $running.root
-        }
-    } catch {}
+    # T34: bootstrap 探测端口优先读 REG_FACTORY_PORT(与 desktop / update-
+    # portable.ps1 共用),再退回默认 8799 / 8800 的回退列表。
+    $bootstrapPorts = @()
+    if ($env:REG_FACTORY_PORT) { $bootstrapPorts += [int]$env:REG_FACTORY_PORT }
+    $bootstrapPorts += @(8799, 8800) | Select-Object -Unique
+    foreach ($probe in $bootstrapPorts) {
+        try {
+            $running = Invoke-RestMethod -Uri "http://127.0.0.1:$probe/api/status" -TimeoutSec 3
+            if ($running.root -and (Test-Path $running.root)) {
+                $InstallDir = $running.root
+                break
+            }
+        } catch {}
+    }
     if ([string]::IsNullOrWhiteSpace($InstallDir)) {
         $InstallDir = Join-Path $HOME "reg-factory"
     }

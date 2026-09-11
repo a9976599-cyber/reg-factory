@@ -92,7 +92,16 @@ def classify_email_provider(email: str) -> str:
 
 
 def _data_root() -> Path:
-    return Path(os.environ.get("REG_FACTORY_DATA_DIR") or Path.cwd()).resolve()
+    # T22: REG_FACTORY_DATA_DIR 已统一作为主数据根;CWD 仅作为开发态兜底,
+    # 生产环境(包括 frozen exe + portable .zip)必须使用 data_dir,否则同一
+    # 邮箱在不同目录会被算作「未领取」。
+    explicit = os.environ.get("REG_FACTORY_DATA_DIR", "").strip()
+    if explicit:
+        return Path(explicit).resolve()
+    fallback = Path.cwd() / ".reg-factory-data"
+    if fallback.exists():
+        return fallback
+    return Path.cwd().resolve()
 
 
 def _token_root() -> Path:
@@ -393,12 +402,31 @@ def move_mailbox_asset(
                 else:
                     kept.append(raw)
             if moved_lines:
-                temporary = source_path.with_suffix(f".{os.getpid()}.tmp")
-                temporary.write_text(
-                    ("\n".join(kept) + "\n") if kept else "",
-                    encoding="utf-8",
+                # T15: 改用统一的 atomic_io 写入器,自带 Windows PermissionError
+                # 重试 + thread id 后缀 tmp 名,避开并发 reader (AV 扫描) 把文件
+                # 短时锁住导致 os.replace 抛错的窗口。
+                # Note: asset_store 的这里是把文本拼接而非 json dump,所以仍是
+                # 「原子覆盖」语义; atomic_io 没有 JSON-text helper,这里用临时
+                # 文件 + os.replace 的二次封装并加重试即可。
+                # ``kept`` 为空时仍要 truncate 原文件(原版就是写空串),不能跳过。
+                payload = ("\n".join(kept) + "\n") if kept else ""
+                temporary = source_path.with_suffix(
+                    f".{os.getpid()}-{threading.get_ident()}.tmp"
                 )
-                temporary.replace(source_path)
+                for _attempt in range(6):
+                    try:
+                        temporary.write_text(payload, encoding="utf-8")
+                        os.replace(str(temporary), str(source_path))
+                        break
+                    except PermissionError:
+                        import time as _t
+                        _t.sleep(0.05 * (2 ** _attempt))
+                        continue
+                else:
+                    try:
+                        os.remove(str(temporary))
+                    except OSError:
+                        pass
                 destination = _lifecycle_root(bucket) / "outlook" / stamp / "emails.txt"
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text("\n".join(moved_lines) + "\n", encoding="utf-8")
@@ -1446,9 +1474,12 @@ def export_batch(
         raise AssetError("limit must be an integer") from exc
     output_format = str(output_format or ("four" if resource == "emails" else "raw")).strip().lower()
     status_filter = _normalize_status_filter(status)
-    if verified_only and status_filter and status_filter != ("normal",):
-        raise AssetError("status 与 normal_only 不一致")
+    # T5: 仅当用户请求``["normal"]``(verified_only 唯真)时,把状态限制
+    # 收紧成 normal。其它显式传入 ``["banned", "expired"]`` 等场景应被视作
+    # 「只要这些状态」、而非「与 normal_only 互斥校验后拒绝」,避免前端
+    # 想去导出封禁号做二次分析时拿到 400。
     requested_statuses = status_filter or (("normal",) if verified_only else ())
+    requested_verified_only = bool(verified_only and requested_statuses == ("normal",))
     scope = "outlook" if resource == "emails" else resource
     with _CURSOR_LOCK:
         existing_claims = set(_read_claims().get(scope, set()))
@@ -1463,7 +1494,7 @@ def export_batch(
                 result = get_email(
                     index=index,
                     output_format=output_format,
-                    verified_only=bool(requested_statuses),
+                    verified_only=requested_verified_only,
                     status=",".join(requested_statuses),
                     claim_once=False,
                     email_provider=email_provider,
@@ -1474,7 +1505,7 @@ def export_batch(
                     resource,
                     output_format=output_format,
                     index=index,
-                    verified_only=bool(requested_statuses),
+                    verified_only=requested_verified_only,
                     status=",".join(requested_statuses),
                     claim_once=False,
                     email_provider=email_provider,

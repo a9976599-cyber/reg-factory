@@ -21,6 +21,7 @@ from typing import Callable
 import requests
 
 from common import asset_store
+from common.atomic_io import write_json_atomic
 
 
 PLATFORMS = ("outlook", "chatgpt", "claude", "grok", "kiro")
@@ -130,12 +131,15 @@ def _read_cache() -> dict:
 
 
 def _write_cache(report: dict) -> None:
-    path = _scan_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    # T13: 串行化并发写入,避免 10 线程同时触发 _write_cache 时把 cache 文件
+    # 写成一堆混合字节。同时改用 common.atomic_io.write_json_atomic,内含
+    # Windows PermissionError retry + thread id 后缀的 tmp 名,绕开 AV 锁。
+    with _WRITE_LOCK:
+        write_json_atomic(_scan_path(), report)
     invalidate_report_cache()
+
+
+_WRITE_LOCK = threading.RLock()
 
 
 def _history_outcomes() -> dict[str, dict]:

@@ -194,12 +194,15 @@ class WriteJsonAtomicCleanupTests(unittest.TestCase):
     """H5：_write_json_atomic dump 失败清理 .tmp 残片、原文件不受损。"""
 
     def test_tmp_cleaned_and_original_intact_on_dump_failure(self):
+        # T15: session_export._write_json_atomic 现在是 common.atomic_io.write_json_atomic 的别名，
+        # 改用 json.dumps(value) 一次性得到 string 再落盘，所以这里 patch common.atomic_io.json.dumps。
+        from common import atomic_io
         with tempfile.TemporaryDirectory() as d:
             target = os.path.join(d, "state.json")
             with open(target, "w", encoding="utf-8") as f:
                 f.write('{"old": true}')
             boom = RuntimeError("dump-boom")
-            with mock.patch.object(session_export.json, "dump", side_effect=boom):
+            with mock.patch.object(atomic_io.json, "dumps", side_effect=boom):
                 with self.assertRaises(RuntimeError):
                     session_export._write_json_atomic(target, {"new": 1})
             leftovers = [name for name in os.listdir(d) if name != "state.json"]

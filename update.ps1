@@ -58,7 +58,16 @@ function Update-Repository {
 }
 
 function Get-ExpectedVersion {
-    if (-not (Test-Path (Join-Path $Root ".git"))) { return "archive" }
+    # T4: zip 安装(无 .git)时,必须读项目根的 VERSION 文件而不是退化成 "archive"。
+    if (-not (Test-Path (Join-Path $Root ".git"))) {
+        $versionFile = Join-Path $Root "VERSION"
+        if (Test-Path $versionFile) {
+            $version = (Get-Content -LiteralPath $versionFile -Raw -ErrorAction SilentlyContinue)
+            if ($version) { $version = $version.Trim() }
+            if ($version) { return $version }
+        }
+        throw "Unable to read VERSION for archive install"
+    }
     $version = (& git -C $Root rev-parse --short=12 HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
         throw "Unable to read the updated Git version"

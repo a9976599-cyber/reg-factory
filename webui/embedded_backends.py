@@ -57,7 +57,9 @@ _log_lock = threading.Lock()
 _LOG_PATH: str | None = None
 
 _state = {"tried": False, "aar": False, "oar": False}
-_state_lock = threading.Lock()
+# T9: 改用 RLock 以允许同线程在持锁状态再调用 status()/try_start_embedded()
+# 时不会自死锁（比如重试循环里再查询 state）。
+_state_lock = threading.RLock()
 
 # v4 内部簿记（官方版本没有的私有状态）
 _threads = {"aar": None, "oar": None}          # tag -> 正在跑的启动线程或 None

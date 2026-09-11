@@ -83,14 +83,18 @@ def configure_live_output():
 def resolve_task_path(root, target):
     """解析任务脚本绝对路径并做防越目录校验，返回通过校验的路径。
 
-    两侧都先 ``realpath``（解析 symlink，防符号链接逃逸），比较时再
-    ``normcase``（Windows 大小写归一，避免 ``Root`` vs ``root`` 误判）。
+    两侧都先 ``realpath``(解析 symlink,防符号链接逃逸),比较时再
+    ``normcase``(Windows 大小写归一,避免 ``Root`` vs ``root`` 误判)。
+
+    T34: 实现在 ``common.path_guard.safe_join_under`` 收敛,确保与
+    ``tools/binary_patch/wrapper_entry.py`` 里的等价实现行为一致。
     """
-    target_path = os.path.abspath(os.path.join(root, target))
-    root_real = os.path.normcase(os.path.realpath(root)) + os.sep
-    if not os.path.normcase(os.path.realpath(target_path)).startswith(root_real):
-        raise SystemExit("task script escapes bundle root: %s" % target)
-    return target_path
+    from common.path_guard import safe_join_under
+
+    try:
+        return safe_join_under(root, os.path.join(root, target))
+    except ValueError as exc:
+        raise SystemExit(f"task script escapes bundle root: {target} ({exc})") from exc
 
 
 def run_task(parsed, log=None):

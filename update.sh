@@ -73,9 +73,20 @@ update_repository() {
 expected_version() {
   if [ -d "$ROOT/.git" ]; then
     git -C "$ROOT" rev-parse --short=12 HEAD
-  else
-    printf '%s\n' archive
+    return
   fi
+  # T4: archive 安装(无 .git)时,从项目根的 VERSION 读版本号;不再硬编码
+  # "archive" 后让健康探测永远匹配不上。
+  if [ -f "$ROOT/VERSION" ]; then
+    local v
+    v="$(cat "$ROOT/VERSION" 2>/dev/null | tr -d '[:space:]')"
+    if [ -n "$v" ]; then
+      printf '%s\n' "$v"
+      return
+    fi
+  fi
+  echo "Unable to read VERSION for archive install" >&2
+  return 1
 }
 
 stop_panel() {
@@ -108,11 +119,15 @@ stop_panel() {
   fi
 
   echo "Stopping old WebUI (PID $panel_pid) ..."
+  # T34: 把 SIGTERM 转发到全部子进程,然后再 SIGKILL 整个进程组(uvicorn fork
+  # 出去的 worker / browser helper 也要一并清掉,避免僵尸 uvicorn 占用端口)。
+  pkill -TERM -P "$panel_pid" 2>/dev/null || true
   kill -TERM "$panel_pid" 2>/dev/null || true
   for _ in $(seq 1 20); do
     kill -0 "$panel_pid" 2>/dev/null || return 0
     sleep 0.5
   done
+  pkill -KILL -P "$panel_pid" 2>/dev/null || true
   kill -KILL "$panel_pid" 2>/dev/null || true
 }
 

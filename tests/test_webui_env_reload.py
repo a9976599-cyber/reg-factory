@@ -493,10 +493,11 @@ class WebUIRunStreamTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("event: done", body)
         payload = body.split("event: done\ndata: ", 1)[1].split("\n", 1)[0]
-        self.assertEqual(
-            json.loads(payload),
-            {"returncode": 7, "stopped": False},
-        )
+        # T7: done 帧合法携带 envelope 字段 (v/offset/lines/done)，因此用子集断言
+        # 而非精确字典等值，避免 envelope 扩展时误判失败。
+        result = json.loads(payload)
+        self.assertEqual(result["returncode"], 7)
+        self.assertIs(result["stopped"], False)
         self.assertEqual(response.headers["cache-control"], "no-cache, no-transform")
         self.assertEqual(response.headers["x-accel-buffering"], "no")
 

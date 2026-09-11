@@ -216,6 +216,10 @@ app = FastAPI(title="reg-factory WebUI")
 # 运行中的任务：run_id -> {proc, lines:[], done:bool, script, cmd, started}
 RUNS = {}
 _run_seq = [0]
+# T32: keep a hard reference to background tasks (SSE pumps, etc.) so the
+# event loop does not garbage-collect them mid-run. The set auto-shrinks via
+# ``task.add_done_callback(_BACKGROUND_TASKS.discard)``.
+_BACKGROUND_TASKS: "set[asyncio.Task]" = set()
 
 # 接码助手：内存记录当前租用的 sms-man 号  pkey -> {phone, rented_at, codes:[], service}
 SMS_RENTS = {}
@@ -410,6 +414,28 @@ def _plus_status(message=""):
     }
 
 
+def _safe_json(request: Request):
+    """T32: parse JSON body or return a 400 JSONResponse.
+
+    Returns a 2-tuple ``(data, error_response)``. Exactly one of them is
+    ``None``. Endpoints can ``return error_response`` after a truthy data
+    check (or vice versa).
+    """
+    try:
+        data = request.json()
+    except Exception:
+        return None, JSONResponse(
+            {"ok": False, "error": "Invalid JSON request body"},
+            status_code=400,
+        )
+    if data is None:
+        return None, JSONResponse(
+            {"ok": False, "error": "Invalid JSON request body"},
+            status_code=400,
+        )
+    return data, None
+
+
 def _update_script(result_path=""):
     if getattr(sys, "frozen", False):
         if os.name != "nt":
@@ -431,8 +457,26 @@ def _update_script(result_path=""):
         ]
         if result_path:
             command.extend(["-ResultPath", result_path])
-        for option, default in (("--host", "127.0.0.1"), ("--port", "8799")):
-            value = default
+        # T3: prefer the runtime env so the portable update script can probe
+        # the exact same port we are bound to. ``sys.argv`` was unreliable
+        # because the frozen exe never re-receives the original CLI args.
+        port_value = (
+            os.environ.get("REG_FACTORY_PORT")
+            or os.environ.get("REG_FACTORY_LISTEN_PORT")
+            or ""
+        )
+        host_value = (
+            os.environ.get("REG_FACTORY_HOST")
+            or os.environ.get("REG_FACTORY_LISTEN_HOST")
+            or ""
+        )
+        for option, default, override in (
+            ("--host", "127.0.0.1", host_value),
+            ("--port", "8799", port_value),
+        ):
+            value = override or default
+            if not value:
+                continue
             try:
                 index = sys.argv.index(option)
                 value = sys.argv[index + 1]
@@ -2899,7 +2943,9 @@ async def api_proxy_set(request: Request):
         if updates[key] == _ENV_MASK:
             updates[key] = str(_read_config_val(key, "") or "").strip()
     mode = updates["PROXY_MODE"] or "clash_auto"
-    if mode not in {"clash_auto", "clash_fixed", "residential"}:
+    # T18: "github" 是把代理转发到内部 GitHub 镜像的合法模式，与 clash_* 和
+    # residential 平级。允许之前默认拒绝，导致前端保存按钮一直 400。
+    if mode not in {"clash_auto", "clash_fixed", "residential", "github"}:
         return JSONResponse({"ok": False, "error": "不支持的代理模式"}, status_code=400)
     updates["PROXY_MODE"] = mode
     platform_modes = {
@@ -2907,7 +2953,9 @@ async def api_proxy_set(request: Request):
         for platform in ("outlook", "claude", "chatgpt", "grok", "kiro")
     }
     for platform, platform_mode in platform_modes.items():
-        if platform_mode not in {"inherit", "clash_auto", "clash_fixed", "residential"}:
+        if platform_mode not in {
+            "inherit", "clash_auto", "clash_fixed", "residential", "github"
+        }:
             return JSONResponse(
                 {"ok": False, "error": f"{platform} 的代理模式无效"}, status_code=400
             )
@@ -3145,8 +3193,26 @@ def _build_cmd(script, args):
                 cmd.append(flag)
         elif typ == "multi":
             if val:
-                cmd.append(flag)
-                cmd.extend(str(v) for v in val)
+                # T18: explicit -prefix check before stringification, plus
+                # deny nested iterables (which the original cmd.extend iterated
+                # directly and would re-inject as positional args).
+                cleaned = []
+                for item in list(val):
+                    if isinstance(item, (list, dict, tuple)):
+                        raise ValueError(
+                            "multi arg cannot contain nested structures"
+                        )
+                    sval = str(item)
+                    if not sval:
+                        continue
+                    if sval.startswith("-"):
+                        raise ValueError(
+                            "multi arg %r 以 '-' 开头，疑似选项注入，已拒绝" % sval
+                        )
+                    cleaned.append(sval)
+                if cleaned:
+                    cmd.append(flag)
+                    cmd.extend(cleaned)
         else:
             if val not in (None, "", []):
                 sval = str(val)
@@ -3403,8 +3469,12 @@ async def _start_managed_run(cmd, sid, task_env, task_cwd):
         try:
             async for raw in proc.stdout:
                 rec["lines"].append(_sanitize_line(raw.decode("utf-8", "replace").rstrip("\n")))
+                # T7: keep an absolute ``offset`` so the client SSE cursor can
+                # always reach the head even when the ring buffer trims.
                 if len(rec["lines"]) > 5000:
+                    drop = len(rec["lines"]) - 4000
                     rec["lines"] = rec["lines"][-4000:]
+                    rec["trimmed_offset"] = rec.get("trimmed_offset", 0) + drop
         except Exception as e:
             rec["lines"].append(f"[webui] 读取输出异常: {e}")
         finally:
@@ -3428,13 +3498,21 @@ async def _start_managed_run(cmd, sid, task_env, task_cwd):
                 with contextlib.suppress(OSError):
                     os.unlink(sensitive_input)
 
-    asyncio.create_task(_pump())
+    rec["trimmed_offset"] = 0
+    # T32: retain the background task so the GC cannot drop it mid-run; the
+    # done callback removes it from the registry once it has naturally ended.
+    pump_task = asyncio.create_task(_pump())
+    _BACKGROUND_TASKS.add(pump_task)
+    pump_task.add_done_callback(_BACKGROUND_TASKS.discard)
     return {"run_id": run_id, "cmd": rec["cmd"]}
 
 
 @app.post("/api/run")
 async def api_run(request: Request):
-    data = await request.json()
+    # T32: surface JSON parse failures as 400 instead of 500.
+    data, error_response = _safe_json(request)
+    if error_response is not None:
+        return error_response
     sid = data.get("script")
     args = data.get("args") or {}
     script = schema.script_by_id(sid)
@@ -3471,21 +3549,53 @@ async def api_logs(run_id: str):
         return JSONResponse({"error": "无此任务"}, status_code=404)
 
     async def _stream():
-        idx = 0
+        # T7: drain lines using a per-connection ``rel_idx`` cursor so the
+        # trim invariant (T7 / §0.5) holds. We always send the enqueued
+        # subset as the cursor index advances; if the producer trims the
+        # ring buffer, ``rel_idx`` stays ahead of ``len(lines)`` and we
+        # skip the trimmed delta. ``offset`` is the running trim sum.
+        rel_idx = 0
+        offset_base = rec.get("trimmed_offset", 0)
+        last_known_idx = -1
         while True:
             lines = rec["lines"]
-            while idx < len(lines):
-                yield f"data: {lines[idx]}\n\n"
-                idx += 1
-            if rec["done"] and idx >= len(rec["lines"]):
-                result = json.dumps(
-                    {
-                        "returncode": rec["returncode"],
-                        "stopped": rec["stopped"],
-                    },
-                    ensure_ascii=False,
-                )
-                yield f"event: done\ndata: {result}\n\n"
+            # Compute the absolute index space:
+            # client_idx = rel_idx + (current_trim_delta)
+            trim_delta = rec.get("trimmed_offset", 0) - offset_base
+            absolute_idx = rel_idx + trim_delta
+            # The producer may have trimmed lines[idx] away — skip past them.
+            new_count = max(0, len(lines) - (absolute_idx + 1))
+            if new_count > 0 and absolute_idx + 1 < len(lines):
+                envelope = {
+                    "v": 2,
+                    "offset": rec.get("trimmed_offset", 0),
+                    "lines": lines[absolute_idx + 1:],
+                    "done": False,
+                }
+                # Move the relative cursor to the end of the produced slice.
+                rel_idx += len(envelope["lines"])
+                yield f"data: {json.dumps(envelope, ensure_ascii=False)}\n\n"
+            elif last_known_idx != rec.get("trimmed_offset", 0):
+                # Heartbeat so the client learns the new absolute offset.
+                last_known_idx = rec.get("trimmed_offset", 0)
+                envelope = {
+                    "v": 2,
+                    "offset": rec.get("trimmed_offset", 0),
+                    "lines": [],
+                    "done": False,
+                }
+                yield f"data: {json.dumps(envelope, ensure_ascii=False)}\n\n"
+            if rec["done"]:
+                envelope = {
+                    "v": 2,
+                    "offset": rec.get("trimmed_offset", 0),
+                    "lines": [],
+                    "done": True,
+                    "returncode": rec["returncode"],
+                    "stopped": rec["stopped"],
+                }
+                yield f"data: {json.dumps(envelope, ensure_ascii=False)}\n\n"
+                yield f"event: done\ndata: {json.dumps(envelope, ensure_ascii=False)}\n\n"
                 break
             await asyncio.sleep(0.4)
 

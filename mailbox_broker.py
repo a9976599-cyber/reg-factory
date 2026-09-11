@@ -32,6 +32,7 @@ from aiohttp import web
 from playwright.async_api import async_playwright
 
 from bitbrowser import BitBrowser
+from common.async_io import to_thread, to_thread_sleep
 from common.browser import inject_stealth, create_browser_with_retry
 from common.mailbox import _outlook_login, _click_folder, _scan_current_folder
 
@@ -136,21 +137,29 @@ class Broker:
                 self.sessions[email] = s
             print(f"  [broker] creating Outlook session for {email}")
             try:
-                pid = create_browser_with_retry(self.bb, f"mbx_{int(time.time())}")
+                # T6: sync BitBrowser calls must be offloaded; otherwise the
+                # asyncio loop blocks while BB RPC happens. We only await
+                # the async-side effects (playwright connect, login).
+                pid = await to_thread(create_browser_with_retry, self.bb, f"mbx_{int(time.time())}")
                 if not pid:
                     raise RuntimeError("create_browser failed")
                 s.pid = pid
-                self.bb._post("/browser/update", {
-                    "id": pid, "proxyMethod": 2, "proxyType": "noproxy",
-                    "browserFingerPrint": {"coreVersion": "130"},
-                })
+                await to_thread(
+                    self.bb._post,
+                    "/browser/update",
+                    {
+                        "id": pid, "proxyMethod": 2, "proxyType": "noproxy",
+                        "browserFingerPrint": {"coreVersion": "130"},
+                    },
+                )
                 data = None
                 for _ in range(8):
                     try:
-                        data = self.bb.open_browser(pid)
+                        # T6: open_browser is sync (requests.post timeout=30).
+                        data = await to_thread(self.bb.open_browser, pid)
                         break
                     except Exception:
-                        await asyncio.sleep(4)
+                        await to_thread_sleep(4)
                 if not data:
                     raise RuntimeError("open_browser failed")
                 s.browser = await self.p.chromium.connect_over_cdp(data["ws"])
@@ -219,12 +228,27 @@ class Broker:
 
             # 基线：记录每个文件夹"当前"匹配邮件数。注册脚本是先触发发码/发链接、再调 /fetch，
             # 故此刻收件箱里的匹配邮件都是【旧的】(MS 欢迎/安全码、上一轮旧验证码)，全部计入基线并忽略。
+            # 锁内仅做占用写 + 决定是否轮换基线。这里为每个邮箱维持一个
+            # ``baseline_observations`` 滚动队列（容量 10），每次成功视为新邮件到达
+            # 时记录最新计数，避免单次离群（如抖动掉到 0、Outlook 排序抽风）导致
+            # 后续依然以旧基线比对、永不触发"有新邮件"的判定。
+            if not hasattr(s, "baseline_observations"):
+                s.baseline_observations = {}
             baseline = {}
             for key, names in folders:
                 await _click_folder(s.page, names)
                 await asyncio.sleep(1.5)
                 baseline[key] = await self._count_matching(s.page, hints)
-            print(f"  [broker] {email} baseline {kind} counts: {baseline}")
+            for key, value in baseline.items():
+                observations = s.baseline_observations.setdefault(key, [])
+                observations.append(int(value))
+                if len(observations) > 10:
+                    del observations[: len(observations) - 10]
+                # T31: 动态基线 —— 取最近 10 次观察的中位数，剥离噪音邮件导致的
+                # 异常抽高基线（譬如 Microsoft 自己偶尔塞一封"安全提示"）。
+                sorted_obs = sorted(int(v) for v in observations)
+                baseline[key] = sorted_obs[len(sorted_obs) // 2]
+            print(f"  [broker] {email} baseline {kind} counts (median N=10): {baseline}")
 
             # 规避基线 race：broker 登录 Outlook 要 20~30s，注册脚本是"先触发发码、再调 /fetch"，
             # 等 broker 登进来数基线时，本轮验证码/链接往往【已经到达】并被计入基线 → 死等"数量增加"必然超时。
@@ -281,12 +305,14 @@ class Broker:
             pass
         if s.pid:
             try:
-                self.bb.close_browser(s.pid)
+                # T6: route sync bb RPC through to_thread so the loop is free
+                # during the BB HTTP POST (each call can take multiple seconds).
+                await to_thread(self.bb.close_browser, s.pid)
             except Exception:
                 pass
-            await asyncio.sleep(1)
+            await to_thread_sleep(1)
             try:
-                self.bb.delete_browser(s.pid)
+                await to_thread(self.bb.delete_browser, s.pid)
             except Exception:
                 pass
         print(f"  [broker] released session: {email}")
@@ -318,7 +344,19 @@ async def h_fetch(request):
     subject_hint = body.get("subject_hint") or ("code", "verify", "verification", "confirm")
     regex = body.get("regex") or r"\b(\d{6})\b"
     kind = body.get("kind") or "code"
-    timeout = int(body.get("timeout") or 150)
+    # T31: defensive int conversion. The previous ``int(body.get(...) or 150)``
+    # silently swallowed malformed values; we now return a 400 so the caller
+    # knows their config is wrong instead of spending a slot on garbage input.
+    raw_timeout = body.get("timeout")
+    try:
+        timeout = int(raw_timeout) if raw_timeout not in (None, "", 0) else 150
+    except (TypeError, ValueError):
+        return web.json_response(
+            {"ok": False, "error": f"invalid timeout {raw_timeout!r}; expected int"},
+            status=400,
+        )
+    if timeout <= 0:
+        timeout = 150
     try:
         val = await broker.fetch(email, password, sender_hint, subject_hint, regex, kind, timeout)
         return web.json_response({"ok": bool(val), "value": val})

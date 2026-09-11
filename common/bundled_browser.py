@@ -8,11 +8,36 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
 
+from common.atomic_io import backup_to, write_json_atomic
 from common.direct_proxy import ProxySpec, parse_proxy
+
+
+# T21: 状态文件的并发读写锁。_save 同时被 create/update/cleanup/close 路径
+# 持有,加锁防止多 worker 同时改 profiles.json 把文件写花。
+_STATE_LOCK = threading.RLock()
+
+
+def _readline_with_deadline(fd, deadline):
+    """T21: 带死线的 readline,防止 CDP 子进程 hang 住把上层的 90s 计时拖死。
+
+    fd 是任何有 ``readline()`` 方法的对象(Popen.stdout 等)。deadline 是
+    absolute monotonic timestamp;返回行为兼容 ``fd.readline()``(空串表示
+    EOF 或超时)。
+    """
+    while time.monotonic() < deadline:
+        try:
+            line = fd.readline()
+        except Exception:
+            return ""
+        if line:
+            return line
+        time.sleep(0.05)
+    return ""
 
 
 def find_browser_path() -> str:
@@ -51,17 +76,23 @@ class BundledBrowser:
         self._processes: dict[str, subprocess.Popen] = {}
 
     def _load(self) -> dict:
-        try:
-            value = json.loads(self.state_path.read_text(encoding="utf-8"))
-            return value if isinstance(value, dict) else {}
-        except Exception:
-            return {}
+        # T21: 状态文件加载也要在锁内执行,确保与 _save 的 read-modify-write
+        # 串行 —— 否则并发的 create_browser + delete_browser 可能读到同一
+        # base profiles 然后互相覆盖丢失对方添加的条目。
+        with _STATE_LOCK:
+            try:
+                value = json.loads(self.state_path.read_text(encoding="utf-8"))
+                return value if isinstance(value, dict) else {}
+            except Exception:
+                return {}
 
     def _save(self, value: dict) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        temp = self.state_path.with_suffix(f".{os.getpid()}.tmp")
-        temp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp.replace(self.state_path)
+        with _STATE_LOCK:
+            self.root.mkdir(parents=True, exist_ok=True)
+            # T21: write_json_atomic 自带 PID + thread id + Windows 短锁
+            # 重试。比手写 ``state_path.with_suffix(".pid.tmp")`` 健壮。
+            backup_to(self.state_path, self.state_path.with_suffix(self.state_path.suffix + ".bak"))
+            write_json_atomic(self.state_path, value)
 
     def _browser_path(self) -> str:
         path = find_browser_path()
@@ -159,17 +190,17 @@ class BundledBrowser:
     def _read_endpoint(process: subprocess.Popen) -> dict:
         deadline = time.monotonic() + 90
         lines = []
+        # T21: 使用带死线 readline helper 替换 inline ``process.stdout.readline()``,
+        # 保证子进程无输出也不会让 deadline 之外的额外 0.1s sleep 累积。
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 raise RuntimeError(f"bundled browser exited before CDP ready: {' '.join(lines[-3:])}")
-            line = process.stdout.readline() if process.stdout else ""
+            line = _readline_with_deadline(process.stdout, min(time.monotonic() + 1, deadline)) if process.stdout else ""
             if line:
                 lines.append(line.strip())
                 if line.startswith("BUNDLED_BROWSER_WS:"):
                     ws = line.split(":", 1)[1].strip()
                     return {"ws": ws, "http": ws.replace("ws://", "http://").rsplit("/devtools/", 1)[0]}
-            else:
-                time.sleep(0.1)
         raise RuntimeError("bundled browser did not expose CDP in 90 seconds")
 
     def close_browser(self, profile_id):

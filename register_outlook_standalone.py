@@ -2123,8 +2123,12 @@ async def register_outlook(page, context, idx=0, captcha_early_abort=False):
 
     # 每次注册开始都重置保留标记，避免上一次人工验证/拦截残留导致后续
     # profile 全部不删（窗口泄漏）。人工验证真正进入时下方会重新置 True。
+    # T12: 写入只动 ContextVar，不再修改跨 attempt 的全局变量。
+    from common.run_context import set_manual_retain as _set_retain
+
     global MANUAL_VERIFY_RETAIN_WINDOW
     MANUAL_VERIFY_RETAIN_WINDOW = False
+    _set_retain(False)
 
     try:
         print(f"  {tag} navigating to signup page...")
@@ -2813,6 +2817,11 @@ async def register_outlook(page, context, idx=0, captcha_early_abort=False):
                         # finish Microsoft's own challenge in the live browser.
                         manual_wait = _env_truthy("OUTLOOK_MANUAL_VERIFY")
                         if manual_wait:
+                            # T12: 同时维护 ContextVar 和全局标记(老
+                            # monkey-patch 仍可读)。
+                            from common.run_context import set_manual_retain as _set_retain
+
+                            _set_retain(True)
                             MANUAL_VERIFY_RETAIN_WINDOW = True
                             print(
                                 f"  {tag} 自动按压已满；已开启人工验证模式。请在 BitBrowser 窗口完成验证，"
@@ -3349,7 +3358,10 @@ async def _register_one_headless(idx, proxy_str):
 
 # ======================== Browser Mode (BitBrowser, full GUI) ========================
 
-# 人工验证模式接管时置位：即使本号未注册成功，也在 finally 保留窗口供查看。
+# T12: 兼容旧代码/monkey-patch 仍可读写模块全局的 MANUAL_VERIFY_RETAIN_WINDOW，
+# 但写入只改 per-run ContextVar,不再修改跨 attempt 的全局。``outlook_reg_loop``
+# 完全改成 ``common.run_context.get_manual_retain()`` 后,本全局其实不再被读取;
+# 保留仅为二方插件兼容。
 MANUAL_VERIFY_RETAIN_WINDOW = False
 
 
@@ -3359,7 +3371,10 @@ async def _register_one_browser(bb, idx, proxy_str, keep_profile=False):
     Returns (email, password) or (email, password, profile_id, ws) when
     keep_profile=True.
     """
-    global MANUAL_VERIFY_RETAIN_WINDOW
+    # T12: 每次进入时清掉上一个 attempt 的保留标记。
+    from common.run_context import set_manual_retain as _set_retain
+
+    _set_retain(False)
     MANUAL_VERIFY_RETAIN_WINDOW = False
     tag = f"[#{idx}][browser]"
     profile_id = None
@@ -3425,7 +3440,13 @@ async def _register_one_browser(bb, idx, proxy_str, keep_profile=False):
         print(f"  {tag} error: {e}")
         return _result(None, None)
     finally:
-        if profile_id and MANUAL_VERIFY_RETAIN_WINDOW:
+        # T10: T12: 取 per-run ContextVar 而非跨 attempt 的全局标志。这样
+        # 即便多个 worker 并发、且某个 worker 用了人工验证，其他 worker 也
+        # 不会被错误地"保留窗口"或被错误地"立即删除"。
+        from common.run_context import get_manual_retain
+        from common.async_io import to_thread_sleep
+        retain_now = bool(get_manual_retain() or MANUAL_VERIFY_RETAIN_WINDOW)
+        if profile_id and retain_now:
             print(
                 f"  {tag} 人工验证模式已保留 BitBrowser 窗口 {profile_id} 供查看；"
                 "完成后可手动关闭，或设置 OUTLOOK_MANUAL_VERIFY=false 恢复自动清理。"
@@ -3433,12 +3454,22 @@ async def _register_one_browser(bb, idx, proxy_str, keep_profile=False):
             return _result(None, None, profile_id, ws)
         if profile_id:
             try:
-                bb.close_browser(profile_id)
-                await asyncio.sleep(2)
-                bb.delete_browser(profile_id)
-                print(f"  {tag} browser cleaned up")
+                # T10: 必须先调 close + delete,再 sleep;若 sleep 先执行而
+                # 之后被取消,profile 可能残留造成 BitBrowser 配额泄漏。两个
+                # 调用均包到 to_thread,确保 await 不会因 BitBrowser HTTP
+                # 同步延迟而卡住 asyncio loop。
+                await asyncio.to_thread(bb.close_browser, profile_id)
             except Exception:
                 pass
+            try:
+                await asyncio.to_thread(bb.delete_browser, profile_id)
+            except Exception:
+                pass
+            try:
+                await to_thread_sleep(2)
+            except asyncio.CancelledError:
+                pass
+            print(f"  {tag} browser cleaned up")
 
 
 async def extract_graph_token_browser(

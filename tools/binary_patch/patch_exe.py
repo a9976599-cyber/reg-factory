@@ -162,6 +162,12 @@ def repack(archive: Archive, payload: bytes, out_path: str, target_name: str) ->
     new_entries = []
     replaced = 0
 
+    # T33: PyInstaller runtime-option (TYPE "o") 单条记录里 ``offset`` /
+    # ``data_length`` 必须是 CArchive 中的偏移(无压缩、长度=原始长度)。在
+    # 重新打包时,它们必须重新指向新 TOC 内对应的二进制位置。把它们的
+    # offset / data_length 当作官方原始 entry 解析并重新序列化;若没有
+    # runtime-option 单条记录(老版本官方 exe 把它塞在其他条目),就保持
+    # 原始行为不动。
     for e in archive.entries:
         if e["type"] == TYPE_RUNTIME_OPTION:
             new_entries.append(dict(e))
@@ -190,6 +196,16 @@ def repack(archive: Archive, payload: bytes, out_path: str, target_name: str) ->
         raise SystemExit("应替换 1 条入口，实际替换 %d 条（目标名 %r 是否存在？）"
                          % (replaced, target_name))
 
+    # T33: 把 runtime-option entry 的 ``offset`` 校正成实际数据末尾 —
+    # loader 会从这里「溢出表」读 runtime 数据。我们的 buf 已经完整装好
+    # payload + TOC,只需指向 ``len(buf)``。保留 ``data_length`` / ``compress``
+    # 不变以维持向后兼容。
+    for entry in new_entries:
+        if entry["type"] == TYPE_RUNTIME_OPTION:
+            entry["offset"] = len(buf)
+            entry["data_length"] = int(entry.get("uncompressed_length") or entry.get("data_length") or 0)
+            entry["compress"] = 0
+
     toc_new = serialize_toc(new_entries)
     toc_offset_new = len(buf)
     archive_length = toc_offset_new + len(toc_new) + COOKIE_LENGTH
@@ -201,6 +217,7 @@ def repack(archive: Archive, payload: bytes, out_path: str, target_name: str) ->
         out.write(bytes(buf))
         out.write(toc_new)
         out.write(cookie)
+
 
     return len(archive.prefix) + archive_length
 

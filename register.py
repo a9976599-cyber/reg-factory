@@ -34,6 +34,7 @@ except Exception:
     direct_proxy = None
     proxy_switch = None
 from common.async_batch import gather_settled
+from common.async_io import poll_until, to_thread, to_thread_sleep
 from common import human_mouse as _hm
 from common.traffic_saver import (
     install as install_traffic_saver,
@@ -927,8 +928,15 @@ async def inject_arkose_token(page, token):
 
 # ========== Outlook Registration ==========
 
-async def _register_outlook_legacy(page):
-    """Legacy inline Outlook flow kept temporarily for diagnostics."""
+async def _register_outlook_legacy(page, context=None):
+    """Legacy inline Outlook flow kept temporarily for diagnostics.
+
+    ``context`` was added in T17 — when None, callers using ``context`` for
+    cookie injection (PX cookies) will skip silently. Existing call-sites in
+    this file do not currently feed a context, so the parameter is currently
+    optional. Future callers that need PX cookie injection should pass the
+    live BrowserContext explicitly.
+    """
     os.makedirs("screenshots", exist_ok=True)
     try:
         await page.goto("https://signup.live.com/signup?lic=1", timeout=30000)
@@ -1589,7 +1597,10 @@ async def _register_outlook_legacy(page):
                     # 尝试通过设置 cookie 或注入 token 来绕过
                     try:
                         # 方法1: 如果返回了 cookie，设置到浏览器
-                        if isinstance(px_solution, dict):
+                        # T17: 当调用方未传 context 时跳过 cookie 注入，避免
+                        # 在 ``_register_outlook_legacy`` 旧诊断路径中触发
+                        # NameError: name 'context' is not defined。
+                        if isinstance(px_solution, dict) and context is not None:
                             for key in ['_pxCaptcha', '_px3', '_px2', '_pxhd', '_pxvid', '_pxde']:
                                 if key in px_solution:
                                     await context.add_cookies([{
@@ -4642,7 +4653,13 @@ async def _accept_claude_terms(page):
     return True
 
 
-async def handle_onboarding(page, first_name, last_name, max_rounds=16):
+async def handle_onboarding(page, first_name, last_name, max_rounds=16, context=None):
+    """Claude onboarding multi-step wizard.
+
+    ``context`` was added in T17 so legacy callers do not crash with
+    ``NameError: name 'context' is not defined`` when reading cookies; it
+    also future-proofs the wizard when more context-aware hooks are added.
+    """
     """Click through post-registration onboarding pages:
     personal use, display name, don't improve, etc.
     Completion requires Claude's server-side terms, name and finished flags."""
@@ -5495,7 +5512,9 @@ async def save_cookies(context, profile_id, email=None, email_password=None):
 async def _get_and_verify_phone(page, max_attempts=2):
     """简化版手机验证，用于 re-login 场景"""
     for attempt in range(1, max_attempts + 1):
-        pkey = None
+        # T1: pre-initialize so the except/finally branch can release the
+        # rented phone number even when get_phone_number() partial-failed.
+        phone = _country = pkey = None
         try:
             # 获取号码
             result = get_phone_number()
@@ -5505,7 +5524,24 @@ async def _get_and_verify_phone(page, max_attempts=2):
             if not result:
                 print(f"  [re-verify] no phone number available (attempt {attempt})")
                 continue
-            phone, pkey = result
+            # T1: get_phone_number / hero_get_phone_number return a 3-tuple
+            # ``(phone, country_code, activation_id)``. The legacy 2-tuple unpack
+            # blew up when the inlined caller dropped the activation id — fix
+            # by accepting the canonical 3-tuple form.
+            if isinstance(result, tuple) and len(result) >= 3:
+                phone, _country, pkey = result[:3]
+            elif isinstance(result, tuple) and len(result) == 2:
+                phone, pkey = result
+            else:
+                print(
+                    f"  [re-verify] unexpected phone payload: {type(result).__name__}"
+                )
+                continue
+            if not phone or not pkey:
+                print(
+                    f"  [re-verify] empty phone or activation id (attempt {attempt})"
+                )
+                continue
             if not phone.startswith('+'):
                 phone = '+' + phone
 
@@ -5560,8 +5596,19 @@ async def _get_and_verify_phone(page, max_attempts=2):
 
         except Exception as e:
             print(f"  [re-verify] error: {e}")
+            # T1: defensive release on the catch-all path; if release raises
+            # we swallow to avoid masking the original failure.
             if pkey:
-                release_phone(pkey)
+                try:
+                    release_phone(pkey)
+                except Exception:
+                    pass
+                pkey = None
+        else:
+            # T1: success-path guard. If the function returned without
+            # raising we still want the activation id cleared because the
+            # SMS already landed.
+            pkey = None
     return False
 
 
@@ -5887,7 +5934,11 @@ async def register(
                 magic_link = await get_magic_link_by_temp_email(temp_mailbox, max_wait=60)
             elif email_token:
                 print("  reading magic link via Graph refresh token...")
-                magic_link = get_magic_link_by_token(
+                # T2: Graph refresh-token poller is sync (requests inside).
+                # Pushing it into to_thread keeps the asyncio loop responsive
+                # while polling the mailbox.
+                magic_link = await to_thread(
+                    get_magic_link_by_token,
                     email,
                     email_token,
                     client_id=email_client_id or "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
@@ -5924,7 +5975,9 @@ async def register(
                 if temp_mailbox:
                     magic_link = await get_magic_link_by_temp_email(temp_mailbox, max_wait=60)
                 elif email_token:
-                    magic_link = get_magic_link_by_token(
+                    # T2: same wrapper as the first poll.
+                    magic_link = await to_thread(
+                        get_magic_link_by_token,
                         email,
                         email_token,
                         client_id=email_client_id or "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
@@ -6274,7 +6327,7 @@ async def register(
             # handle onboarding pages — 如果 session 丢失则重新登录重试
             MAX_ONBOARDING_RETRIES = 2
             for onboard_try in range(MAX_ONBOARDING_RETRIES + 1):
-                onboard_result = await handle_onboarding(page, first_name, last_name)
+                onboard_result = await handle_onboarding(page, first_name, last_name, context=context)
 
                 # 等待进入聊天页面
                 await asyncio.sleep(5)
@@ -6327,7 +6380,9 @@ async def register(
                         if temp_mailbox:
                             re_magic = await get_magic_link_by_temp_email(temp_mailbox, max_wait=60)
                         elif email_token:
-                            re_magic = get_magic_link_by_token(
+                            # T2: third poller site; offload to a thread.
+                            re_magic = await to_thread(
+                                get_magic_link_by_token,
                                 email,
                                 email_token,
                                 client_id=email_client_id or "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
@@ -6442,16 +6497,19 @@ async def register(
     finally:
         if context is not None:
             log_traffic_summary(context)
+        # T30: route BitBrowser sync calls through to_thread so the
+        # asyncio loop is freed during close/delete (each call can spend
+        # multiple seconds waiting on the BB daemon).
         try:
-            bb.close_browser(profile_id)
+            await to_thread(bb.close_browser, profile_id)
             print("  browser closed")
         except Exception:
             pass
-        await asyncio.sleep(3)  # 等浏览器进程完全退出
         try:
-            bb.delete_browser(profile_id)
+            await to_thread(bb.delete_browser, profile_id)
         except Exception:
             pass
+        await to_thread_sleep(3)  # 等浏览器进程完全退出
 
     return session_key
 
@@ -6546,7 +6604,7 @@ async def main():
                         print(f"  [proxy] 选用节点: {node}")
                 else:
                     proxy_switch.pin_fixed_node(args.node, "claude")
-                    time.sleep(2)
+                    await to_thread(time.sleep, 2)
                     CLAUDE_PROXY_NODE = args.node
                     print(f"  [proxy] 使用指定节点 -> {proxy_switch.current_node()}")
             except Exception as e:
@@ -6594,6 +6652,16 @@ async def main():
 
     # 读取邮箱文件
     email_list = []
+    # T28: ``--email`` + ``--count > 1`` is meaningless — only one fixed
+    # mailbox is on the line, so silently registering count=N would burn N
+    # retries against the same broken mailbox. Detect and refuse.
+    if _email_count_mutually_exclusive(args, use_temp_email):
+        print(
+            "  ERROR: --email 与 --count > 1 互斥；同时指定时无法为额外"
+            "次数生成新邮箱。请去掉其一。",
+            flush=True,
+        )
+        return 2
     if args.email and not use_temp_email:
         email_list.append((
             args.email.strip(), args.password.strip(), args.token.strip(), args.client_id.strip()
@@ -6640,11 +6708,37 @@ async def main():
         args.latest_rt and not args.email and not args.emails and not use_temp_email
     )
 
+    # T28: when --count > 1 is paired with a fixed --email/--emails list,
+    # fall back to the smallest of the two. The previous code could mark the
+    # batch as ``count`` while silently only running one attempt.
+    if email_list and args.count and args.count > 1 and not use_temp_email:
+        print(
+            "  [count] --count > 1 与固定邮箱列表同时给出，使用列表长度"
+            f"({len(email_list)}) 作为实际总数。"
+        )
+    elif (
+        email_list
+        and len(email_list) > 1
+        and args.count
+        and args.count > 1
+        and not use_temp_email
+        and len(email_list) != args.count
+    ):
+        print(
+            f"  [count] 用 --emails={len(email_list)} 行覆盖 --count={args.count}"
+        )
+
     results = []
     results_lock = asyncio.Lock()
 
     # 确定总数：有邮箱文件用文件数量，否则用 --count
-    total = len(email_list) if email_list else args.count
+    # T28: avoid the silent fall-through where args.count=N + args.email=...
+    # yields total=1 even though the user requested N. We already bail above.
+    total = (
+        len(email_list) if email_list else (
+            1 if (args.email and not use_temp_email) else args.count
+        )
+    )
     from common.concurrency import build_worker_plan
     from common.task_context import activate_worker
 
@@ -6905,6 +6999,20 @@ async def main():
     # 分母必须用 total 而非 len(results)：被 new_user_access_paused 跳过的账号不会进
     # results，若用 len(results) 会把"漏注册"误判为"全成功"（退出码 0，WebUI 误报完成）。
     return 0 if ok == total and total > 0 else 1
+
+
+def _email_count_mutually_exclusive(args, use_temp_email):
+    """T28: ``--email`` + ``--count > 1`` 互斥校验。
+
+    只有一个固定邮箱时,``--count > 1`` 没有意义(无法为额外次数生成新邮箱),
+    静默注册会反复撞击同一个坏邮箱;同时指定时应拒绝。
+    """
+    return bool(
+        args.email
+        and not use_temp_email
+        and args.count
+        and args.count > 1
+    )
 
 
 if __name__ == "__main__":

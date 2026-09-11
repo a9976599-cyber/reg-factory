@@ -774,11 +774,19 @@ async def main():
 
     if result is True:
         print("\n  RESULT: SUCCESS")
+        # T27: 退出码 0 = 全部完成;1 = 失败;2 = 不确定(脚本自检 / 通信超时)
+        sys.exit(0)
     elif result is False:
         print("\n  RESULT: FAILED")
+        sys.exit(1)
     else:
         print("\n  RESULT: UNCLEAR (manual check needed)")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # 用户主动取消,记为不确定以触发人工检查。
+        sys.exit(2)

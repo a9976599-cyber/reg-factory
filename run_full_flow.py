@@ -236,12 +236,28 @@ def stage_emails(args, env, target_count=1, concurrency=1):
         # 边读子进程日志边透传，同时每读几行 poll 一次 emails.txt
         assert proc.stdout is not None
         last_check = 0.0
+        # T23: 引入带死线 readline,父进程不会被无输出 hang 死。
+        # 每 5s 检查 elapsed,超过 --email-total-timeout 仍无进展就主动发
+        # SIGINT 让子进程收尾,然后再等 5s。
+        # 从 common.bundled_browser 复用 _readline_with_deadline 实现。
+        try:
+            from common.bundled_browser import _readline_with_deadline
+        except Exception:
+            _readline_with_deadline = None
+        last_progress = time.time()
         while True:
             if proc.poll() is not None:
                 log("Stage A 子进程已退出", "A")
                 break
-            line = proc.stdout.readline()
+            if _readline_with_deadline is not None:
+                line = _readline_with_deadline(
+                    proc.stdout,
+                    time.monotonic() + 1.0,
+                )
+            else:
+                line = proc.stdout.readline()
             if line:
+                last_progress = time.time()
                 print(f"  [outlook] {line}", end="", flush=True)
             now = time.time()
             if now - last_check >= 2:
@@ -254,7 +270,21 @@ def stage_emails(args, env, target_count=1, concurrency=1):
                     break
             if now > deadline:
                 log(f"Stage A 总超时 {args.email_total_timeout}s 仍无新号", "A")
-                break
+                # T23: 主动 SIGINT 给子进程收尾机会,而不是直接 SIGKILL。
+                if time.time() - last_progress > args.email_total_timeout / 2:
+                    try:
+                        proc.send_signal(getattr(__import__("signal"), "SIGINT"))
+                    except Exception:
+                        pass
+                    # 仍给子进程最多 5s 收尾
+                    deadline_eof = time.time() + 5
+                    while time.time() < deadline_eof and proc.poll() is None:
+                        line = proc.stdout.readline() if proc.stdout else ""
+                        if line:
+                            print(f"  [outlook] {line}", end="", flush=True)
+                        else:
+                            time.sleep(0.5)
+                    break
             if not line:
                 time.sleep(0.2)
     finally:

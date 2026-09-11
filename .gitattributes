@@ -3,3 +3,11 @@
 *.ps1 text eol=crlf
 # shell 脚本用 LF
 *.sh text eol=lf
+# T16: 这些文件是 LF-only 内容,Windows 拉取后不能被自动转换,否则大小写/NUL
+# 行序会变(尤其是回归测试断言 VERSION 必须以换行结尾)。
+VERSION -text
+pytest.ini -text
+.github/workflows/** -text
+tests/fixtures/** -text
+CHANGELOG.md -text
+README.md -text

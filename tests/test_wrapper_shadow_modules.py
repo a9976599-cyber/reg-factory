@@ -80,10 +80,10 @@ class WrapperShadowModuleTests(unittest.TestCase):
         self.assertIn("except BaseException as exc:", self.source)
 
     def test_task_target_escape_check_uses_realpath_containment(self):
+        # T34: 改走 common.path_guard.safe_join_under(共享 realpath/normcase)
         self.assertIn("def _rf_safe_task_path", self.source)
-        self.assertIn("os.path.normcase", self.source)
-        self.assertIn("os.path.realpath", self.source)
-        self.assertIn("root_real + os.sep", self.source)
+        self.assertIn("from common.path_guard import safe_join_under", self.source)
+        self.assertIn("safe_join_under(bundle_root, candidate)", self.source)
         self.assertIn("task script outside bundle root", self.source)
 
     def test_entry_still_delegates_to_official_code_object(self):

@@ -72,17 +72,24 @@ def msgbox(text, title="auto free 控制台", icon=0x10):
 
 
 def _smoke_marker(state):
-    """无界面自检标记：写 exe 同目录 auth-smoke-ok.txt。
+    """无界面自检标记:写 exe 同目录 auth-smoke-ok.txt。
 
-    与官方冻结入口同形：发布流水线用 ``REG_FACTORY_SMOKE=1`` 空跑一次，靠这个
-    文件判断「后端真的起来了」，不需要有人盯着窗口点。缺了它不是普通用户的
-    问题，但会让「发布包 ≠ 仓库源码」的漂移无从发现。
+    T25: 启动流程失败时绝不再写标记,避免「上次运气好写入的标志被本次失败
+    误读为「后端可用」。同时尽量在失败时清理掉遗留的 marker。
     """
     try:
         exe_dir = os.path.dirname(
             os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__)
         )
-        with open(os.path.join(exe_dir, "auth-smoke-ok.txt"), "w", encoding="utf-8") as f:
+        marker = os.path.join(exe_dir, "auth-smoke-ok.txt")
+        if state != "ok":
+            # 失败时尝试清理标记,便于上游失败自检不被「上次 OK」误判。
+            try:
+                os.remove(marker)
+            except OSError:
+                pass
+            return
+        with open(marker, "w", encoding="utf-8") as f:
             f.write(f"smoke-{state} {time.strftime('%Y-%m-%d %H:%M:%S')}")
     except Exception:
         pass
@@ -98,10 +105,18 @@ def port_in_use(port):
 
 
 def find_free_port(start):
+    """Find the first free TCP port starting from ``start``.
+
+    T25: 全部被占用时抛 ``RuntimeError`` 而不是返回 0 — 调用方以前会把
+    ``port=0`` 变成 ``uvicorn :0`` 然后等不到绑定;此处宁可直接失败。
+    """
     for p in range(start, start + 50):
         if not port_in_use(p):
             return p
-    return 0  # 全都占满 → 让系统分配随机端口
+    raise RuntimeError(
+        f"No free TCP port found in {start}..{start + 49}; "
+        "close conflicting WebUIs or set --port to a larger value"
+    )
 
 
 def _uvicorn_log_to_file():
@@ -140,16 +155,34 @@ def start_uvicorn_in_thread(port):
 
 
 def wait_for_backend(port, timeout=40):
+    """T25: 拆分为「端口可达」+ 「健康探测」两段;总时长从环境变量读取,默认 120s。
+
+    ``REG_FACTORY_HEALTH_TIMEOUT`` 总秒数;``REG_FACTORY_HEALTH_INTERVAL`` 秒轮询
+    间隔(默认 0.5s)。失败时返回 False,绝不写启动成功标记。
+    """
     import urllib.request
-    start = time.time()
-    while time.time() - start < timeout:
+    deadline = time.time() + float(
+        os.environ.get("REG_FACTORY_HEALTH_TIMEOUT", "120")
+    )
+    interval = float(os.environ.get("REG_FACTORY_HEALTH_INTERVAL", "0.5"))
+    last_err = None
+    while time.time() < deadline:
+        # 端口可达优先探测:TCP 握手比 HTTP / 更便宜,失败原因更明确。
+        if not port_in_use(port):
+            time.sleep(interval)
+            continue
         try:
-            r = urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2)
+            r = urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/status", timeout=2
+            )
             if r.status == 200:
                 return True
         except Exception as e:
-            log(f"wait backend retry: {type(e).__name__}: {e}")
-        time.sleep(0.5)
+            last_err = type(e).__name__ + ":" + str(e)[:120]
+            log(f"wait backend retry: {last_err}")
+        time.sleep(interval)
+    if last_err:
+        log(f"wait backend timeout ({timeout}s): {last_err}")
     return False
 
 
@@ -202,7 +235,11 @@ def main():
     url = f"http://127.0.0.1:{port}"
 
     if not wait_for_backend(port):
-        log("backend failed to start:\n" + traceback.format_exc())
+        # T25: 只有在 except 块内才能调用 traceback.format_exc();此处无法
+        # 知道失败类型,就把它改为 ``log`` + 继续,这样失败自检仍看得到日志。
+        log(
+            f"backend failed to start (port={port}); see {LOG_PATH} for details"
+        )
         if os.environ.get("REG_FACTORY_SMOKE") == "1":
             _smoke_marker("backend-fail")
         msgbox(

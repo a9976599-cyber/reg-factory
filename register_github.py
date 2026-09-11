@@ -503,9 +503,17 @@ async def register_one(
 
     gh_password = rand_password()
     username = rand_username()
+    # T26: 不要把 password 明文打到 stdout/log。User/password 同样去掉。
+    try:
+        local_part, _, domain = email.partition("@")
+        masked_email = (local_part[:3] + "***") if local_part else "***"
+        if domain:
+            masked_email = f"{masked_email}@{domain}"
+    except Exception:
+        masked_email = "***"
     print(
         f"\n>>> github signup #{index}/{total}: "
-        f"email={email} user={username} pass={gh_password}"
+        f"account={masked_email} user={username[:3]}***"
     )
 
     name = f"github_{time.strftime('%m%d_%H%M%S')}_{index}"
