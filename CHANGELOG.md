@@ -1,4 +1,31 @@
-﻿## 2.3.0（2026-09-11）— 第五轮审计：修复「修复从未送达」的结构性缺口
+﻿## 2.3.1（2026-09-11）— 授权链路修复 + 已知遗留清零
+
+### 授权（恢复云授权门禁完整可用：卡密 / 账号密码登录）
+
+- **[P1] 影子加载丢授权后端**：2.3.0 用影子加载顶掉 PYZ 旧版 `webui.server` 时，
+  没把官方云授权组件带过来 —— `license_guard` 中间件（未授权 402 拦截引擎/注册
+  功能）与 `/api/auth-info`、`/api/auth/machine-code`、`/api/auth/activate`、
+  `/api/auth/logout`、`/api/auth/diag` 五个端点全部 404，面板授权徽章、激活窗、
+  诊断整体失效。现按冻结版逐语义重建（`ysq_auth`：卡密 32 位 / 账号+密码两种
+  激活方式、心跳续期、机器码绑定；`ysq_auth` 缺失时优雅降级）。
+- **[P1] 面板授权 UI 自 2.2.7 起整块丢失**：static 覆盖链（index.html/app.js）
+  用的是 fork 版，fork 时官方的授权徽标、卡密/账号密码激活浮层、402 fetch
+  拦截器被整块删掉。本轮从官方 2.2.4 原版逐字节移植回 fork。
+- 防回归：`CONTENT_GUARDS` 把 `license_guard` / `/api/auth/*` 纳入发布物断言；
+  新增 `WebuiServerLicenseGateTests` 锁定后端端点；前端移植后 grep 锁验证。
+
+### 已知遗留清零（上轮 CHANGELOG「已知遗留」三项）
+
+- **oar Job 队列无界**：`Job._queue` 设 maxsize（满时丢最旧事件），
+  `_jobs` 完成后延迟淘汰 —— 长跑内存不再单调增长。
+- **aar save_account 竞态**：accounts 表加 `(platform, email)` 去重迁移 +
+  唯一索引，save 改 upsert —— 并发任务不再插出重复账号行。
+- **oar register_batch 双实现**：逐行核对确认 batch 版按
+  `_plan_proxies(proxy, count)` 为每个账号独立分配出口 IP（`proxy_plan[idx]`），
+  「一号一 IP」防封语义与 iter 版一致；实际调用方只走 iter 版，无行为分歧。
+  薄委托重构评估后不做（iter 版只 yield dict 事件，包装会丢 RegisterResult 契约）。
+
+## 2.3.0（2026-09-11）— 第五轮审计：修复「修复从未送达」的结构性缺口
 
 本轮审计发现的最重要问题不是某个 bug，而是**交付链路的结构性缺陷**：
 PYZ 里的 `webui.server` / `common.sms` / `common.session_export` 是官方旧版，

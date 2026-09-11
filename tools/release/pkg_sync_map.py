@@ -123,6 +123,12 @@ CONTENT_GUARDS = [
     ("_internal/webui/server.py", b"_ENV_MASK"),
     ("_internal/webui/server.py", b"_is_masked"),
     ("_internal/webui/server.py", b"startup_aar_backend"),
+    # 2.3.1：影子版 webui.server 必须带云授权门禁（丢了 = 面板授权徽章/激活全挂）
+    ("_internal/webui/server.py", b"license_guard"),
+    ("_internal/webui/server.py", b"/api/auth/activate"),
+    ("_internal/webui/server.py", b"/api/auth/machine-code"),
+    ("_internal/webui/server.py", b"_expiry_parts"),
+    ("_internal/webui/server.py", b"_FEATURE_ENGINE_PREFIXES"),
 ]
 
 # 不得出现在发布物【脚本】里的上游标识。

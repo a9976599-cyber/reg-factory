@@ -85,5 +85,56 @@ class WrapperShadowModuleTests(unittest.TestCase):
         self.assertIn('exec(_RF_ORIG, sys.modules["__main__"].__dict__)', self.source)
 
 
+class WebuiServerLicenseGateTests(unittest.TestCase):
+    """回归锁：影子版 webui.server 必须保留云授权门禁。
+
+    2.3.0 的影子加载顶掉了 PYZ 旧版 webui.server，却没把官方的
+    license_guard 中间件与 /api/auth-* 端点带过来 —— 面板授权徽章、
+    卡密/账号密码激活、诊断整体 404。这里从源码层面锁死这些端点。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = (ROOT / "webui" / "server.py").read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.source)
+
+    def _funcs(self):
+        return {
+            node.name for node in ast.walk(self.tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+
+    def test_auth_endpoints_present(self):
+        funcs = self._funcs()
+        for required in (
+            "license_guard",
+            "api_auth_info",
+            "api_auth_machine_code",
+            "api_auth_activate",
+            "api_auth_logout",
+            "api_auth_diag",
+            "_expiry_parts",
+            "_is_feature_request",
+        ):
+            self.assertIn(required, funcs, "webui/server.py 缺少授权函数 %s" % required)
+
+    def test_auth_routes_registered(self):
+        for route in ("/api/auth-info", "/api/auth/machine-code", "/api/auth/activate", "/api/auth/logout", "/api/auth/diag"):
+            self.assertIn(route, self.source, "缺少授权路由 %s" % route)
+
+    def test_feature_prefixes_match_frozen_semantics(self):
+        # 引擎桥请求（含精确匹配 /aar /oar）全部要授权；写请求除白名单外全部要授权
+        self.assertIn('"/aar-api/", "/aar/", "/aar", "/oar-api/", "/oar-api", "/oar"', self.source)
+        self.assertIn('("/api/auth/", "/api/test", "/api/update")', self.source)
+        # ysq_auth 缺失时必须优雅降级（_auth_impl = None），不能让 import 炸掉主服务
+        self.assertIn("import ysq_auth as _auth_impl", self.source)
+        self.assertIn("_auth_impl = None", self.source)
+
+    def test_guards_cover_shadow_server_in_release_map(self):
+        map_src = (ROOT / "tools" / "release" / "pkg_sync_map.py").read_text(encoding="utf-8")
+        for marker in (b"license_guard", b"/api/auth/activate"):
+            marker_str = marker.decode()
+            self.assertIn(marker_str, map_src, "CONTENT_GUARDS 必须锁定 %s" % marker_str)
+
+
 if __name__ == "__main__":
     unittest.main()

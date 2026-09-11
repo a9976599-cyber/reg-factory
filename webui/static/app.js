@@ -1,4 +1,28 @@
 // reg-factory WebUI 前端逻辑（原生 JS，无构建）
+
+/* ===== 授权拦截：任何接口返回 402 need_auth → 弹激活浮层（进入免检、用功能才验证） ===== */
+(function(){
+  if (window.__authInterceptorInstalled) return;
+  window.__authInterceptorInstalled = true;
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async function(input, init){
+    const resp = await origFetch(input, init);
+    try{
+      if (resp.status === 402){
+        // 读 body 确认是授权拦截（JSON 内容读完不影响后续使用：clone 一份）
+        const ct = resp.headers.get('content-type') || '';
+        if (ct.includes('application/json')){
+          const cloned = resp.clone();
+          const j = await cloned.json().catch(()=>null);
+          if (j && j.need_auth){
+            window.dispatchEvent(new CustomEvent('af-need-auth', {detail: j.msg || ''}));
+          }
+        }
+      }
+    }catch(e){ /* 拦截失败不打扰正常请求 */ }
+    return resp;
+  };
+})();
 let SCRIPTS = [];
 let EMBEDS = [];
 let curRun = null;     // 当前运行 run_id
@@ -2468,6 +2492,238 @@ $('#global-search').addEventListener('input', (e)=>{
     b.style.display = (!q || text.includes(q)) ? '' : 'none';
   });
 });
+
+/* ===== 授权徽标 + 激活浮层：进入免检、用功能才验证 ===== */
+function authAcctLabel(a){
+  if(!a) return '';
+  const s = String(a);
+  return s.length > 14 ? s.slice(0,4)+'…'+s.slice(-4) : s;
+}
+let authState = {authorized:false, kind:'', account:'', expires_at:'', expired:false};
+
+async function refreshAuthBadge(){
+  const b = document.getElementById('auth-badge');
+  const t = document.getElementById('auth-badge-text');
+  if(!b || !t) return;
+  let info;
+  try{ info = await (await fetch('/api/auth-info')).json(); }
+  catch(e){ b.style.display='none'; return; }
+  authState = Object.assign({authorized:false, kind:'', account:'', expires_at:'', expired:false}, info||{});
+  b.style.display = '';
+  b.classList.toggle('expired', authState.expired || !authState.authorized);
+  if(!authState.authorized){
+    const dot = document.getElementById('auth-badge-dot');
+    if(dot) dot.className = 'dot off';
+    t.textContent = '未授权 · 点此激活';
+    b.title = '未激活：使用任何功能前需先授权，点我激活';
+    b.classList.add('clickable');
+    return;
+  }
+  const dotEl = document.getElementById('auth-badge-dot');
+  if(dotEl) dotEl.className = 'dot on';
+  b.classList.add('clickable');
+  const who = authState.kind === 'user'
+    ? (authAcctLabel(authState.account)||'账号')
+    : (authState.account ? '卡密 '+authAcctLabel(authState.account) : '卡密');
+  let text;
+  if(authState.expired) text = who + ' · 授权已过期';
+  else if(authState.remaining) text = who + ' · 到期 ' + (authState.expires_local||'') + '（' + authState.remaining + '）';
+  else if(authState.expires_local) text = who + ' · 到期 ' + authState.expires_local;
+  else text = who + ' · 长期有效';
+  t.textContent = text;
+  b.title = 'auto free 授权：' + text + '\n点我管理/切换授权';
+}
+refreshAuthBadge();
+setInterval(refreshAuthBadge, 60000);
+
+/* ---------- 激活浮层 ---------- */
+function injectAuthStyles(){
+  if(document.getElementById('af-auth-style')) return;
+  const st = document.createElement('style');
+  st.id = 'af-auth-style';
+  st.textContent = `
+.af-ov{position:fixed;inset:0;z-index:9999;background:rgba(8,10,16,.72);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.af-ov .af-box{width:430px;max-width:92vw;background:#141a26;border:1px solid #2a3556;border-radius:14px;padding:20px;color:#e8ecf4;box-shadow:0 18px 60px rgba(0,0,0,.5);font-size:13px;max-height:88vh;overflow:auto;position:relative}
+.af-ov .af-box h3{margin:0 0 4px;font-size:16px}
+.af-ov .af-sub{color:#8fa0bd;margin:0 0 14px}
+.af-ov .af-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.af-ov label{display:block;color:#9fb0cf;margin:10px 0 4px}
+.af-ov input[type=text],.af-ov input[type=password]{width:100%;box-sizing:border-box;background:#0d121c;border:1px solid #2b3a5b;color:#e8ecf4;border-radius:8px;padding:9px 10px;font-size:13px}
+.af-ov input:focus{outline:none;border-color:#4a6cf7}
+.af-ov .af-mc{font-family:Consolas,monospace;background:#0d121c;border:1px dashed #2b3a5b;border-radius:8px;padding:7px 10px;font-size:12px;color:#8fd0a0;word-break:break-all;flex:1;user-select:all}
+.af-ov .af-tabs{display:flex;gap:6px;margin:14px 0 2px;border-bottom:1px solid #22304d;padding-bottom:8px}
+.af-ov .af-tab{background:none;border:none;color:#8fa0bd;cursor:pointer;padding:5px 10px;border-radius:6px;font-size:13px}
+.af-ov .af-tab.on{color:#fff;background:#22304d}
+.af-ov .af-err{color:#ff8a8a;min-height:16px;margin:8px 0 0;font-size:12px;white-space:pre-wrap}
+.af-ov .af-ok{color:#7ee0a0}
+.af-ov button.af-btn{width:100%;background:linear-gradient(135deg,#3a5af0,#5b7cfa);border:none;color:#fff;border-radius:8px;padding:10px;font-size:14px;cursor:pointer;margin-top:12px;font-weight:600}
+.af-ov button.af-btn:disabled{opacity:.55;cursor:default}
+.af-ov .af-state{margin-top:10px;background:#10162a;border:1px solid #22304d;border-radius:8px;padding:8px 10px;color:#cfd9ec;font-size:12px}
+.af-ov .af-state b{color:#e8ecf4}
+.af-ov .af-close{position:absolute;background:#2a3556;border:none;color:#cfd9ec;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;top:12px;right:12px}
+.af-ov .af-quit{background:none;border:1px solid #3a2a2a;color:#ff9a9a;border-radius:8px;padding:8px;margin-top:10px;width:100%;cursor:pointer;font-size:12px}
+`;
+  document.head.appendChild(st);
+}
+
+async function openAuthDialog(){
+  injectAuthStyles();
+  if(document.getElementById('af-ov')) return;
+  // 查询机器码（卡密绑定本机，用户需要核对）
+  let mc = '';
+  try{ mc = (await (await fetch('/api/auth/machine-code')).json()).machine_code || ''; }
+  catch(e){}
+  const ov = document.createElement('div');
+  ov.className = 'af-ov';
+  ov.id = 'af-ov';
+  ov.innerHTML = `
+  <div class="af-box">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>auto free 授权</h3>
+      <button class="af-close" id="af-close" title="关闭">✕</button>
+    </div>
+    <p class="af-sub">进入软件免验证，使用任何功能前需激活。</p>
+    <div class="af-state">本机机器码：<br><div style="font-family:Consolas,monospace;color:#8fd0a0;font-size:12px;word-break:break-all;user-select:all" id="af-mc">${mc || '获取中…'}</div></div>
+    <div class="af-tabs">
+      <button class="af-tab on" id="af-tab-card">卡密激活</button>
+      <button class="af-tab" id="af-tab-user">账号登录</button>
+    </div>
+    <div id="af-pane-card">
+      <label>卡密</label>
+      <input type="text" id="af-card" placeholder="输入卡密，建议直接复制粘贴" autocomplete="off">
+      <div class="af-err" id="af-err"></div>
+      <button class="af-btn" id="af-go-card">验证并激活</button>
+    </div>
+    <div id="af-pane-user" style="display:none">
+      <label>账号</label>
+      <input type="text" id="af-user" placeholder="授权账号" autocomplete="off">
+      <label>密码</label>
+      <input type="password" id="af-pass" placeholder="授权密码">
+      <div class="af-err" id="af-err-u"></div>
+      <button class="af-btn" id="af-go-user">登录并激活</button>
+    </div>
+    <div class="af-err" id="af-msg"></div>
+    <button class="af-quit" id="af-logout" style="display:none">退出当前授权</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const stateInfo = (()=>{ return authState; })();
+  const btnClose = ov.querySelector('#af-close');
+  const close = ()=>ov.remove();
+  btnClose.onclick = close;
+  ov.addEventListener('mousedown', e=>{ if(e.target===ov) close(); });
+  const cardPane = ov.querySelector('#af-pane-card'), userPane = ov.querySelector('#af-pane-user');
+  const tabCard = ov.querySelector('#af-tab-card'), tabUser = ov.querySelector('#af-tab-user');
+  tabCard.onclick = ()=>{ tabCard.classList.add('on'); tabUser.classList.remove('on'); cardPane.style.display=''; userPane.style.display='none'; };
+  tabUser.onclick = ()=>{ tabUser.classList.add('on'); tabCard.classList.remove('on'); userPane.style.display=''; cardPane.style.display='none'; };
+  const errCard = ov.querySelector('#af-err'), errUser = ov.querySelector('#af-err-u'), msgEl = ov.querySelector('#af-msg');
+  function showErr(el, txt){ if(el && txt) el.textContent = txt; }
+  // 自诊断：激活失败时把「软件→授权服务器」连通性直接显示在框里，用户不用翻日志
+  async function appendDiagToErr(errEl){
+    if(!errEl) return;
+    let text = '';
+    try{
+      const pr = await fetch('/api/auth/diag', {method:'GET'});
+      const j = await pr.json().catch(()=>null);
+      if(!j) return;
+      const lines = [];
+      lines.push('— 自诊断（软件→授权服务器） —');
+      const dg = j.diag;
+      if(dg && dg.ok === true){
+        lines.push('连通正常：' + dg.ms + 'ms · 服务器已识别「' + (dg.sw||'') + '」');
+        lines.push('网络没问题，问题在激活请求本身 → 再点一次或重启软件');
+      } else if(dg && dg.ok === false){
+        lines.push('连不上授权服务器：' + (dg.err||'未知'));
+        lines.push('→ 先确认本机联网；平时需开代理/VPN 才上得去外网的保持开启再试');
+      } else if(dg && dg.err){
+        lines.push('自检：' + dg.err);
+      } else {
+        lines.push('后端没返回自检结果（后端可能异常，重启软件）');
+      }
+      text = '\n' + lines.join('\n');
+    }catch(_e){ return; }
+    try{ if(errEl.style) errEl.style.whiteSpace = 'pre-wrap'; }catch(_e){}
+    if(text) showErr(errEl, (errEl.textContent||'') + text);
+  }
+
+  async function doActivate(mode, payload, btn, errEl){
+    btn.disabled = true; btn.textContent = '验证中…';
+    try{
+      const r = await fetch('/api/auth/activate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(Object.assign({mode}, payload))});
+      const j = await r.json().catch(()=>({}));
+      if(j && j.ok){
+        // 后端已确认授权成功（建会话+存缓存）。这里只是“展示成功”，
+        // 绝不能因 UI 渲染崩进外层 catch 把成功误报成失败——全部独立 try。
+        msgEl.textContent = '';
+        try{ ov.querySelector('.af-state').innerHTML = '授权成功！心跳自动续期。'; }catch(_e){}
+        try{ await refreshAuthBadge(); }catch(_e){}
+        try{
+          const okNote = document.createElement('div');
+          okNote.className = 'af-ok'; okNote.style.cssText = 'text-align:center;color:#7ee0a0;font-weight:700;font-size:14px;padding:6px 0';
+          okNote.textContent = '✓ 激活成功，可以正常使用功能了';
+          // 直接追加到框内末尾即可；别用 insertBefore(_, btnClose.nextSibling)——
+          // af-close 在 header 子层里，其 nextSibling 不是 .af-box 的子节点会抛 DOM 异常。
+          (ov.querySelector('.af-box') || ov).appendChild(okNote);
+          setTimeout(close, 900);
+        }catch(_e){ /* 横幅没显示不影响已授权 */ setTimeout(close, 500); }
+      } else {
+        showErr(errEl, (j && j.msg) || '激活失败，请稍后重试');
+        appendDiagToErr(errEl);
+      }
+    }catch(e){
+      // 走到这是请求本身没拿到响应：把真因亮出来，别再吞成笼统的“网络错误”。
+      let why = '';
+      try{ why = (e && (e.message || String(e))) || '未知错误'; }catch(_x){ why = '未知错误'; }
+      let hint = '（若提示无法连接/加载失败/Failed to fetch，多半是软件连不上授权服务器：开/关系统代理后重试）';
+      try{
+        const pr = await fetch('/api/auth-info', {method:'GET'});
+        if(pr.ok){ hint = '本机软件后端正常，卡在“软件→授权服务器”的外网链路：需联网或开代理后重试'; }
+        else { hint = '本机软件后端异常响应(' + pr.status + ')，建议重启软件再激活'; }
+      }catch(_e){ hint = '本机软件后端没响应，建议先重启软件再激活'; }
+      if(errEl) errEl.style.whiteSpace = 'pre-wrap';
+      showErr(errEl, '请求没完成：' + why + '\n' + hint);
+      appendDiagToErr(errEl);
+    }
+    btn.disabled = false; btn.textContent = mode==='card' ? '验证并激活' : '登录并激活';
+  }
+  ov.querySelector('#af-go-card').onclick = ()=>{
+    const card = ov.querySelector('#af-card').value.trim();
+    if(!card){ showErr(errCard, '请先输入卡密'); return; }
+    doActivate('card', {card_no: card}, ov.querySelector('#af-go-card'), errCard);
+  };
+  ov.querySelector('#af-go-user').onclick = ()=>{
+    const u = ov.querySelector('#af-user').value.trim();
+    const p = ov.querySelector('#af-pass').value;
+    if(!u || !p){ showErr(errUser, '账号和密码都要填'); return; }
+    doActivate('user', {username:u, password:p}, ov.querySelector('#af-go-user'), errUser);
+  };
+  // 回车提交
+  ov.querySelector('#af-card').addEventListener('keydown', e=>{ if(e.key==='Enter') ov.querySelector('#af-go-card').click(); });
+  ov.querySelector('#af-user').addEventListener('keydown', e=>{ if(e.key==='Enter') ov.querySelector('#af-pass').focus(); });
+  ov.querySelector('#af-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') ov.querySelector('#af-go-user').click(); });
+
+  // 已授权会话 → 显示当前状态并给出退出入口
+  const logoutBtn = ov.querySelector('#af-logout');
+  if(stateInfo.authorized){
+    logoutBtn.style.display = '';
+    logoutBtn.onclick = async ()=>{
+      try{ await fetch('/api/auth/logout', {method:'POST'}); }catch(e){}
+      await refreshAuthBadge();
+      close();
+    };
+    const st = ov.querySelector('.af-state');
+    st.innerHTML = st.innerHTML + `当前授权：<b>${authAcctLabel(stateInfo.account)||stateInfo.kind}</b> · ${stateInfo.expires_local||'长期有效'}<br>${stateInfo.expired ? '<span style="color:#ff9a9a">已过期，可输入新卡密续期</span>' : '如需切换账号可重新激活'}`;
+  }
+}
+
+// 徽标点击 → 管理/激活；功能被 402 拦截 → 自动弹
+(function(){
+  const badge = document.getElementById('auth-badge');
+  if(badge) badge.onclick = ()=>{ openAuthDialog(); };
+  window.addEventListener('af-need-auth', ()=>{
+    openAuthDialog();
+  });
+})();
+
 
 /* ===== 总览 Dashboard（仿 any-auto-register 概览：卡片网格 + 服务状态 + 邮箱资产） ===== */
 let dashMailbox = [];

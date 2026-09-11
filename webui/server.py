@@ -3612,3 +3612,235 @@ try:
         print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
 except Exception as _aar_exc:  # 融合桥失败不影响主服务
     print(f"[aar-bridge] disabled: {_aar_exc}", flush=True)
+
+
+# ---- 云授权门禁（ysq_auth：卡密 / 账号密码激活 + 心跳续期） ----
+# 与官方冻结版 webui.server 逐语义对齐：面板授权徽章、激活窗、诊断、
+# 以及「未授权时拦截引擎功能请求」的 license_guard 中间件。
+# ysq_auth / yunshouquan_sdk 只存在于官方 PYZ（闭源）；源码模式下
+# _auth_impl 为 None → 功能默认全开，授权端点返回「组件未加载」。
+try:
+    import ysq_auth as _auth_impl  # noqa: N813 - 与官方命名一致
+except Exception:  # 源码模式 / 无授权组件
+    _auth_impl = None
+
+_FEATURE_ENGINE_PREFIXES = (
+    "/aar-api/", "/aar/", "/aar", "/oar-api/", "/oar-api", "/oar",
+)
+_FEATURE_GET_PREFIXES = (
+    "/api/assets/cookies", "/api/assets/emails", "/api/assets/export",
+    "/api/assets/scan", "/api/mailpool/export", "/api/chatgpt-plus/export-ats",
+    "/api/chatgpt-plus/log", "/api/logs", "/api/email-check",
+)
+_WRITE_ALLOWED_PREFIXES = ("/api/auth/", "/api/test", "/api/update")
+_BROWSE_PREFIXES = (
+    "/static/", "/assets/", "/api/status", "/api/summary", "/api/env-request",
+)
+
+
+def _is_feature_request(path: str, method: str) -> bool:
+    if any(path.startswith(p) or path == p for p in _FEATURE_ENGINE_PREFIXES):
+        return True
+    if method in ("POST", "PUT", "PATCH", "DELETE"):
+        if any(path.startswith(p) for p in _WRITE_ALLOWED_PREFIXES):
+            return False
+        return True
+    if method == "GET":
+        if any(path.startswith(p) for p in _FEATURE_GET_PREFIXES):
+            return True
+        return False
+    return False
+
+
+def _expiry_parts(exp: str):
+    """到期 ISO 时间 → (本地可读时间, 剩余时长文案, 是否已过期)。"""
+    import datetime as _dt
+
+    try:
+        if not exp:
+            return ("", "", False)
+        s = exp[:-1] + "+00:00" if exp.endswith("Z") else exp
+        dt = _dt.datetime.fromisoformat(s)
+        if dt.tzinfo:
+            dt = dt.astimezone()
+        now = _dt.datetime.now().astimezone()
+        left = dt - now
+        expired = left.total_seconds() <= 0
+        if expired:
+            remaining = "已过期"
+        else:
+            days, secs = left.days, left.seconds
+            if days > 0:
+                remaining = f"剩 {days}天{secs // 3600}小时"
+            elif secs >= 3600:
+                remaining = f"剩 {secs // 3600}小时{(secs % 3600) // 60}分"
+            else:
+                remaining = f"剩 {secs // 60}分钟"
+        return (dt.strftime("%Y-%m-%d %H:%M"), remaining, expired)
+    except Exception:
+        return (str(exp)[:16], "", False)
+
+
+@app.get("/api/auth-info")
+def api_auth_info():
+    st = {}
+    try:
+        import ysq_auth
+
+        st = ysq_auth.session_status()
+    except Exception:
+        pass
+    if not st.get("authorized"):
+        return {
+            "authorized": False, "kind": "", "account": "", "expires_at": "",
+            "expires_local": "", "remaining": "", "expired": False,
+        }
+    exp = st.get("expires_at") or ""
+    local, remaining, expired = _expiry_parts(exp)
+    return {
+        "authorized": True,
+        "kind": st.get("kind") or "",
+        "account": st.get("account") or "",
+        "expires_at": exp,
+        "expires_local": local,
+        "remaining": remaining,
+        "expired": expired,
+    }
+
+
+@app.middleware("http")
+async def license_guard(request: Request, call_next):
+    path = request.url.path
+    if _is_feature_request(path, request.method):
+        try:
+            authorized = bool(_auth_impl and _auth_impl.session_status().get("authorized"))
+        except Exception:
+            authorized = True
+        if not authorized:
+            accept = request.headers.get("accept") or ""
+            if "text/html" in accept:
+                from fastapi.responses import HTMLResponse as _HR
+
+                return _HR(
+                    '<!doctype html><html lang="zh"><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    "<title>需要授权</title><body style=\"background:#0f1420;color:#e8ecf4;"
+                    "font-family:system-ui,sans-serif;display:flex;align-items:center;"
+                    'justify-content:center;min-height:100vh;margin:0"><div style='
+                    '"text-align:center;max-width:420px;padding:24px"><div style='
+                    '"font-size:40px">🔐</div><h2 style="margin:12px 0 8px">该功能需要授权</h2>'
+                    '<p style="color:#9fb0cf;line-height:1.6;margin:0 0 20px">使用注册功能前请先在'
+                    '主界面激活。回到 auto free 控制台，点击顶栏"<b>未授权 · 点此激活</b>"'
+                    '完成卡密/账号授权即可。</p><a href="/" style="display:inline-block;'
+                    "background:#3a5af0;color:#fff;text-decoration:none;padding:10px 22px;"
+                    'border-radius:8px;font-weight:600">← 返回控制台</a></div></body></html>',
+                    status_code=402,
+                )
+            from fastapi.responses import JSONResponse as _JR
+
+            return _JR(
+                {"need_auth": True, "msg": "该功能需要授权，请先激活（点顶栏“未授权”即可）"},
+                status_code=402,
+            )
+    return await call_next(request)
+
+
+@app.get("/api/auth/machine-code")
+def api_auth_machine_code():
+    try:
+        import ysq_auth
+
+        return {"machine_code": ysq_auth.machine_code()}
+    except Exception:
+        return {"machine_code": ""}
+
+
+@app.post("/api/auth/activate")
+def api_auth_activate(body: dict):
+    if not _auth_impl:
+        return {"ok": False, "msg": "授权组件未加载"}
+    mode = (body or {}).get("mode", "card")
+    if mode == "card":
+        card_no = (body.get("card_no") or "").strip()
+        if not card_no:
+            return {"ok": False, "msg": "卡密不能为空"}
+        cred = {"card_no": card_no}
+    elif mode == "user":
+        username = (body.get("username") or "").strip()
+        password = body.get("password") or ""
+        if not username or not password:
+            return {"ok": False, "msg": "账号或密码不能为空"}
+        cred = {"username": username, "password": password}
+    else:
+        return {"ok": False, "msg": "未知激活方式"}
+    try:
+        ok, info = _auth_impl.activate_now(mode, cred)
+        return {
+            "ok": ok,
+            "msg": ("授权成功" if ok else info),
+            "authorized": _auth_impl.session_status().get("authorized", False),
+        }
+    except Exception as e:  # noqa: BLE001 - 激活异常不能炸面板
+        import traceback as _tb
+
+        try:
+            _tb.print_exc()
+            _auth_impl.log(f"activate unexpected err: {type(e).__name__}: {e}\n{_tb.format_exc()}")
+        except Exception:
+            pass
+        return {"ok": False, "msg": f"激活内部异常：{type(e).__name__}: {e}", "authorized": False}
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout():
+    if _auth_impl:
+        try:
+            _auth_impl.shutdown()
+        except Exception:
+            pass
+    return {"ok": True}
+
+
+@app.get("/api/auth/diag")
+def api_auth_diag():
+    base = ""
+    out = {"authorized": False, "kind": "", "account": "", "expires_at": "", "diag": None}
+    try:
+        st = _auth_impl.session_status() if _auth_impl else {"authorized": False}
+        for k in ("authorized", "kind", "account", "expires_at"):
+            if st.get(k) is not None:
+                out[k] = st[k]
+    except Exception:
+        pass
+    try:
+        import time as _t
+
+        if _auth_impl is None:
+            out["diag"] = {"ok": None, "err": "授权组件未加载，本机没有授权逻辑（功能默认全开）"}
+            return out
+        from yunshouquan_sdk import YunShouQuanSDK as _YSQSDK
+
+        base = getattr(_auth_impl, "BASE_URL", "") or os.environ.get("YSQ_BASE_URL", "https://api.xxauth.com")
+        app_id = getattr(_auth_impl, "APP_ID", "") or os.environ.get("YSQ_APP_ID", "")
+        sdk = _YSQSDK(base_url=base, app_id=app_id, timeout=5)
+        t0 = _t.time()
+        d = sdk.init(platform="windows")
+        out["diag"] = {
+            "ok": True,
+            "ms": int((_t.time() - t0) * 1000),
+            "server": base,
+            "sw": (d.get("software") or {}).get("name", ""),
+        }
+        _auth_impl.log("diag net OK %dms" % out["diag"]["ms"])
+    except Exception as e:  # noqa: BLE001
+        import traceback as _tb
+
+        try:
+            out["diag"] = {"ok": False, "server": base, "err": f"{type(e).__name__}: {e}"}
+            try:
+                _auth_impl.log(f"diag net FAIL: {type(e).__name__}: {e}\n{_tb.format_exc()}")
+            except Exception:
+                pass
+        except Exception:
+            pass
+    return out

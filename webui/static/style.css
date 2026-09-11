@@ -1380,3 +1380,20 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .oar-field select,.oar-field input{background:#151c2a;border-color:var(--line)}
 .oar-console,.log,#plus-run-log{background:#0f1520;border-color:var(--line)}
 @media (max-width:1100px){.dash-workspace{grid-template-columns:1fr}.dash-workspace .dash-mailbox-table-wrap .asset-scan-table{min-width:620px}}
+
+/* ===== 授权徽标（auto free 授权状态） ===== */
+.auth-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  background:rgba(255,207,110,.08) !important;
+  border:1px solid rgba(255,207,110,.40) !important;
+  color:#ffd98a !important;border-radius:999px !important;
+  padding:5px 12px !important;font-size:12px !important;white-space:nowrap !important;
+  font-weight:600 !important;cursor:default !important;
+  max-width:38vw;overflow:hidden;text-overflow:ellipsis;
+}
+.auth-badge .dot{background:#ffcf6e !important;box-shadow:0 0 8px rgba(255,207,110,.8) !important}
+.auth-badge.clickable{cursor:pointer !important}
+.auth-badge.clickable:hover{filter:brightness(1.15)}
+.auth-badge.expired{border-color:rgba(255,90,90,.5) !important;color:#ff9a9a !important;background:rgba(255,60,60,.08) !important}
+.auth-badge.expired .dot{background:#ff5a5a !important;box-shadow:0 0 8px rgba(255,90,90,.8) !important}
+.auth-badge .dot.off{background:#5a5f6a !important;box-shadow:none !important}

@@ -32,8 +32,16 @@ class MaskGuardTests(unittest.TestCase):
         server.ENV_EXAMPLE = str(Path(server.ROOT) / ".env.example")
         self._patcher = mock.patch.object(server, "_apply_saved_env", lambda updates: None)
         self._patcher.start()
+        # 源码模式没有 ysq_auth（_auth_impl=None），license_guard 会 402 拦截
+        # 全部写请求 —— 测试里挂一个已授权 stub，与冻结态行为一致。
+        self._auth_patcher = mock.patch.object(
+            server, "_auth_impl",
+            type("_AuthStub", (), {"session_status": staticmethod(lambda: {"authorized": True})})(),
+        )
+        self._auth_patcher.start()
 
     def tearDown(self):
+        self._auth_patcher.stop()
         self._patcher.stop()
         server.ENV_PATH, server.ENV_EXAMPLE = self._old_env_path, self._old_example
 
