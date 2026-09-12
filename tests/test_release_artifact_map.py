@@ -30,11 +30,22 @@ class ReleaseArtifactMapTests(unittest.TestCase):
         例外：`_internal/webui/server.py` 由 wrapper_entry v3 影子加载（见
         tests/test_wrapper_shadow_modules.py），文件覆盖经由 sys.modules 预注册生效。
         """
+        # 2.3.3：这 4 个是审计新增、官方 PYZ 里确实【没有】的 common 模块。
+        # 真机验证（reg-factory.exe -u --task 探针在冻结进程内 import）：未随包发出
+        # 时报 ModuleNotFoundError；放进 _internal/common/ 后全部可导入 —— 证明
+        # 冻结 common 包的 __path__ 确实覆盖 _internal/common，松散文件生效。
+        # 依赖来源：async_io <- mailbox_broker/register/register_outlook_standalone；
+        # atomic_io <- common/session_export；run_context <- outlook_reg_loop/
+        # register_outlook_standalone；path_guard <- wrapper_entry(T34)。
         allowed_common = {
             "_internal/common/async_batch.py",
             "_internal/common/env_refresh.py",
             "_internal/common/sms.py",
             "_internal/common/session_export.py",
+            "_internal/common/async_io.py",
+            "_internal/common/atomic_io.py",
+            "_internal/common/run_context.py",
+            "_internal/common/path_guard.py",
         }
         # 影子加载名单（必须与 tools/binary_patch/wrapper_entry.py 的
         # _RF_SHADOW_MODULES 一致；webui/server.py 同时也在同步表）
@@ -108,6 +119,60 @@ class ReleaseArtifactMapTests(unittest.TestCase):
                 if needle in data:
                     hits.append("%s (%s)" % (src, needle.decode()))
         self.assertEqual(hits, [], "同步的脚本里仍有上游标识：%s" % hits)
+
+    def test_runtime_artifacts_are_detected_and_clean_tree_passes(self):
+        """发布闸门必须能拦住运行期产物。
+
+        2.3.3 打包实测：运行期往暂存包写了
+        `_internal/runtime/state/custom_sms_pool.json(.lock)`、
+        `engine/aar/data/account_manager.db`、`engine/oar/accounts/outlook.db(-wal/-shm)`，
+        而旧闸门只查「顶层 .log」，于是 6 个文件全部漏过、仍报 PASS。
+        这里锁定加固后的行为：脏树全命中，干净树不误伤。
+        """
+        import tempfile
+
+        from tools.release import assert_release_artifact as gate
+
+        dirty = [
+            "_internal/runtime/state/custom_sms_pool.json",
+            "_internal/runtime/state/custom_sms_pool.json.lock",
+            "engine/aar/data/account_manager.db",
+            "engine/oar/accounts/outlook.db-wal",
+            "engine/oar/accounts/outlook.db-shm",
+            "reg-factory-desktop.log",
+            "_internal/deep/nested/server.log",
+            ".env",
+            "auto_free_auth.json",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel in dirty:
+                p = Path(tmp) / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b"x")
+            hits = {rel for _kind, rel in gate.runtime_artifact_hits(tmp)}
+            self.assertEqual(
+                hits, set(dirty), "运行期产物漏检：%s" % sorted(set(dirty) - hits)
+            )
+
+        # 官方包真实存在的合法文件不能被误伤（.env.example 是随包模板，
+        # _internal/common/*.py 是松散模块，账本类 .json 无扩展名冲突）。
+        legit = [
+            "VERSION",
+            ".env.example",
+            "_internal/.env.example",
+            "_internal/common/async_io.py",
+            "engine/aar/data/seed_accounts.json",
+            "_internal/python312.dll",
+            "reg-factory.exe",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel in legit:
+                p = Path(tmp) / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b"x")
+            self.assertEqual(
+                gate.runtime_artifact_hits(tmp), [], "干净包被误伤"
+            )
 
     def test_negative_guards_are_synced_and_absent_from_source(self):
         missing = [

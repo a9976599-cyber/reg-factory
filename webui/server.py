@@ -11,6 +11,7 @@ webui/server.py — reg-factory 本地 Web 面板后端(FastAPI)。
 """
 import asyncio
 import base64
+import concurrent.futures
 import contextlib
 import hmac
 import io
@@ -298,6 +299,16 @@ def _read_config_val(key, default="", allow_empty=False):
     return default
 
 
+# FIX(便携包): 冻结二进制不调用 load_dotenv，.env 不会自动进 os.environ。默认
+# PROXY_MODE=clash_auto 时 api_status() 会调 _test_clash() 阻塞 6s，超过桌面端 2s
+# 健康检查超时，导致控制台打不开。这里在导入期把 .env 的 PROXY_MODE 注入 os.environ
+# （仅当进程未显式设置该变量），使 .env 生效；direct 模式跳过 _test_clash。
+if not os.environ.get("PROXY_MODE"):
+    _cfg_proxy_mode = _read_config_val("PROXY_MODE", "").strip()
+    if _cfg_proxy_mode:
+        os.environ["PROXY_MODE"] = _cfg_proxy_mode
+
+
 def _http_alive(url, timeout=3, headers=None, verify_tls=True):
     try:
         req = urllib.request.Request(url, headers=headers or {})
@@ -312,6 +323,36 @@ def _http_alive(url, timeout=3, headers=None, verify_tls=True):
         return True  # 其他 4xx = 服务活着(拒绝裸请求)
     except Exception:
         return False
+
+
+# FIX(便携包): /api/status 首屏刷新慢的性能修复。
+# 实测：本机对"已关闭的 loopback 端口"发起连接不会秒失败，要等约 2s 才返回；
+# 而 /api/status 会串行探测 BitBrowser 与 K12，两个探测叠加后单次请求要 3~4s，
+# 把界面首次状态刷新拖慢。下面三点共同把首屏压到 ~1s、后续近 0：
+#   1) 探活超时从 3s/1.5s 收到 0.8s（本地服务活着时是毫秒级响应，0.8s 足够）；
+#   2) 结果按短 TTL 缓存，轮询不再反复白等连接超时；
+#   3) 两个探活并行执行，首次请求只付"最慢的一个"。
+_LOCAL_PROBE_TTL = 5.0
+_LOCAL_PROBE_TIMEOUT = 0.8
+_LOCAL_PROBE_CACHE = {}
+_LOCAL_PROBE_LOCK = threading.Lock()
+
+
+def _probe_local_cached(key, url, timeout=_LOCAL_PROBE_TIMEOUT, headers=None, verify_tls=True):
+    """带短 TTL 缓存的本地服务探活（仅用于状态展示，缓存不影响真实启动判定）。"""
+    now = time.monotonic()
+    with _LOCAL_PROBE_LOCK:
+        hit = _LOCAL_PROBE_CACHE.get(key)
+        if hit is not None and (now - hit[0]) < _LOCAL_PROBE_TTL:
+            return hit[1]
+    value = _http_alive(url, timeout=timeout, headers=headers, verify_tls=verify_tls)
+    with _LOCAL_PROBE_LOCK:
+        _LOCAL_PROBE_CACHE[key] = (time.monotonic(), value)
+    return value
+
+
+def _k12_alive_cached():
+    return _probe_local_cached("k12", urllib.parse.urljoin(_k12_url(), "api/health"))
 
 
 def _k12_url():
@@ -2815,6 +2856,27 @@ def api_status():
     else:
         bb = _read_config_val("BITBROWSER_API", "http://127.0.0.1:54345")
         provider_label = "bitbrowser"
+    # 并行预热两个本地探活（见 _probe_local_cached 上方注释）：串行会叠加各自的连接
+    # 超时，并行后首次请求只等最慢的一个；此处只填缓存，取值仍在下方进行。
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as _pool:
+            _warm = [_pool.submit(_k12_alive_cached)]
+            if provider_label not in {"cloak", "bundled", "custom"}:
+                _warm.append(
+                    _pool.submit(
+                        _probe_local_cached,
+                        "browser:" + str(bb),
+                        bb,
+                        _LOCAL_PROBE_TIMEOUT,
+                        browser_headers,
+                        browser_verify_tls,
+                    )
+                )
+            for _future in _warm:
+                _future.result()
+    except Exception:
+        pass
+
     if provider_label == "cloak":
         try:
             import importlib.util
@@ -2825,7 +2887,9 @@ def api_status():
     elif provider_label in {"bundled", "custom"}:
         browser_ready = os.path.isfile(bb)
     else:
-        browser_ready = _http_alive(bb, headers=browser_headers, verify_tls=browser_verify_tls)
+        browser_ready = _probe_local_cached(
+            "browser:" + str(bb), bb, headers=browser_headers, verify_tls=browser_verify_tls
+        )
     mode = "clash_auto"
     proxy = ""
     network = False
@@ -2849,7 +2913,7 @@ def api_status():
         "network": network,
         "proxy_mode": mode,
         "direct_proxy": mode == "residential" and bool(proxy),
-        "k12": _k12_alive(),
+        "k12": _k12_alive_cached(),
         "chatgpt_plus": _plus_status()["ready"],
         "node": node,
         "running": sum(1 for r in RUNS.values() if not r["done"]),
@@ -3685,6 +3749,17 @@ async def shutdown_local_services():
         with contextlib.suppress(asyncio.CancelledError):
             await K12_START_TASK
     K12_START_TASK = None
+    # 融合桥：取消开机时的后台 AAR 探活任务，避免平稳关闭时在途任务触发
+    # "Task was destroyed but it is pending" 告警。_AAR_ENSURE_TASK 定义在下方
+    # try: 融合桥块内，该块异常进入 except 时该名字不存在 → 用 globals() 安全读取，
+    # 既避免 NameError，也无需在此函数声明 global。
+    _aar_ensure_task = globals().get("_AAR_ENSURE_TASK")
+    if _aar_ensure_task is not None:
+        if not _aar_ensure_task.done():
+            _aar_ensure_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await _aar_ensure_task
+        globals()["_AAR_ENSURE_TASK"] = None
     await _stop_k12_service()
     await asyncio.to_thread(_stop_plus_service_sync)
     await asyncio.to_thread(_cleanup_registered_browser_profiles)
@@ -3701,10 +3776,11 @@ try:
 
     app.include_router(aar_router)
     _aar_ready = False
+    _AAR_ENSURE_TASK = None  # 持有后台探活任务的强引用，避免被 GC 提前回收
 
     @app.on_event("startup")
     async def startup_aar_backend():
-        global _aar_ready
+        global _aar_ready, _AAR_ENSURE_TASK
         # frozen 便携包：同进程内嵌 engine/aar + engine/oar（:8000/:8890），
         # 恢复旧版「开机即监听」行为（2.3.2 起 embedded_backends 有仓库影子
         # 修复版：并行后台启动不阻塞本事件；源码模式没有 engine/ 目录 →
@@ -3716,11 +3792,21 @@ try:
             await asyncio.to_thread(embedded_backends.try_start_embedded)
         except Exception as exc:  # noqa: BLE001 - 内嵌失败不影响主面板
             print(f"[aar-bridge] embedded backends skip: {exc}", flush=True)
-        # ensure_aar_running 内部最多同步等待 20s（40 x 0.5s 探活），绝不能放在
-        # import 期执行：无 AAR 环境的机器上整个 WebUI 启动会被白等到超时。
-        # 挪到 startup 事件（线程池）执行；/aar 桥接请求自身也会按需拉起后端。
-        _aar_ready = await asyncio.to_thread(ensure_aar_running)
-        print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
+        # FIX(便携包「项目启动打开很慢」): ensure_aar_running 内部最多同步等待约
+        # 20s（40 x 0.5s 探活）。uvicorn 必须先跑完所有 startup 事件才开始对外
+        # 服务，所以在此 await 它会把「双击 exe → 窗口可用」整体推迟这么久
+        # （冷启动/引擎尚未就绪时最明显）。改为 fire-and-forget：立即让 uvicorn
+        # 对外服务，探活与按需拉起后端放进后台任务；/aar 桥接请求自身也会按需
+        # 拉起后端，功能不受影响。
+        async def _ensure_aar_background():
+            global _aar_ready
+            try:
+                _aar_ready = await asyncio.to_thread(ensure_aar_running)
+                print(f"[aar-bridge] AAR backend alive at boot: {_aar_ready}", flush=True)
+            except Exception as exc:  # noqa: BLE001 - 后台任务异常不影响主服务
+                print(f"[aar-bridge] ensure_aar_running background skip: {exc}", flush=True)
+
+        _AAR_ENSURE_TASK = asyncio.create_task(_ensure_aar_background())
 except Exception as _aar_exc:  # 融合桥失败不影响主服务
     print(f"[aar-bridge] disabled: {_aar_exc}", flush=True)
 
@@ -3794,6 +3880,12 @@ def _expiry_parts(exp: str):
 
 @app.get("/api/auth-info")
 def api_auth_info():
+    if _auth_impl is None:
+        # 源码模式：闭源授权组件未加载，按设计「功能默认全开」，前端显示为已激活
+        return {
+            "authorized": True, "kind": "dev", "account": "源码模式", "expires_at": "",
+            "expires_local": "", "remaining": "永久", "expired": False,
+        }
     st = {}
     try:
         import ysq_auth
@@ -3824,7 +3916,11 @@ async def license_guard(request: Request, call_next):
     path = request.url.path
     if _is_feature_request(path, request.method):
         try:
-            authorized = bool(_auth_impl and _auth_impl.session_status().get("authorized"))
+            if _auth_impl is None:
+                # 源码模式：闭源 ysq_auth 未打包，按设计意图「功能默认全开」
+                authorized = True
+            else:
+                authorized = bool(_auth_impl.session_status().get("authorized"))
         except Exception:
             authorized = True
         if not authorized:

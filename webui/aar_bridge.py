@@ -20,14 +20,34 @@ from common.async_io import to_thread
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
-AAR_ROOT = Path(os.getenv("AAR_ROOT", str(Path.home() / "any-auto-register-src" / "any-auto-register-main")))
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_engine_root(env_key: str, engine_rel: str, legacy_home: Path) -> Path:
+    """解析 AAR/OAR 引擎根目录。
+
+    查找顺序（与 docs/engine-venvs.md 的布局约定对齐）：
+      1. 显式环境变量 AAR_ROOT / OAR_ROOT（最高优先级）
+      2. 仓库/发布包内的 engine/<aar|oar>（便携包与源码模式补 engine/ 后命中）
+      3. 旧的 ~/any-auto-register-src 等 home 约定（向后兼容）
+    """
+    explicit = os.getenv(env_key)
+    if explicit:
+        return Path(explicit)
+    engine_dir = _REPO_ROOT / engine_rel
+    if engine_dir.exists():
+        return engine_dir
+    return legacy_home
+
+
+AAR_ROOT = _resolve_engine_root("AAR_ROOT", "engine/aar", Path.home() / "any-auto-register-src" / "any-auto-register-main")
 AAR_STATIC = AAR_ROOT / "static"
 AAR_PY = AAR_ROOT / ".venv_aar" / "Scripts" / "python.exe"
 AAR_PORT = int(os.getenv("AAR_PORT", "8000"))
 AAR_BASE_URL = f"http://127.0.0.1:{AAR_PORT}"
 
 # outlook-auto-register（Outlook 纯协议批量注册控制台）
-OAR_ROOT = Path(os.getenv("OAR_ROOT", str(Path.home() / "outlook-auto-register-src")))
+OAR_ROOT = _resolve_engine_root("OAR_ROOT", "engine/oar", Path.home() / "outlook-auto-register-src")
 OAR_PY = OAR_ROOT / ".venv_oar" / "Scripts" / "python.exe"
 OAR_PORT = int(os.getenv("OAR_PORT", "8890"))
 OAR_BASE_URL = f"http://127.0.0.1:{OAR_PORT}"

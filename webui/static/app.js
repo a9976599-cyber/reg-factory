@@ -2897,6 +2897,31 @@ async function aarApi(path, opts={}){
   if(!r.ok){ throw new Error(`${r.status} ${await r.text().catch(()=>'')}`.slice(0,200)); }
   return r.json();
 }
+// 引擎冷启动(首次解压需 1-3 分钟)或上一实例僵尸期间，主控制台桥接会 502。
+// 这里自动重试，面板无需手动刷新即可在引擎就绪后自愈（不会再「一直转圈/加载失败」）。
+async function aarApiRetry(path, opts={}, tries=30, gap=4000){
+  let lastErr;
+  for(let i=0;i<tries;i++){
+    try{ return await aarApi(path, opts); }
+    catch(e){ lastErr=e; if(i<tries-1) await new Promise(r=>setTimeout(r, gap)); }
+  }
+  throw lastErr;
+}
+async function aarSettingsLoadWithRetry(){
+  const batch=()=>Promise.all([
+    aarApiRetry('/config/options'),
+    aarApiRetry('/config'),
+    aarApi('/provider-settings?provider_type=mailbox').catch(()=>[]),
+    aarApi('/provider-settings?provider_type=captcha').catch(()=>[]),
+    aarApi('/provider-settings?provider_type=sms').catch(()=>[]),
+  ]);
+  let lastErr;
+  for(let i=0;i<30;i++){
+    try{ return await batch(); }
+    catch(e){ lastErr=e; if(i<29) await new Promise(r=>setTimeout(r,4000)); }
+  }
+  throw lastErr;
+}
 const STATUS_LABELS = {
   registered:'已注册', trial:'试用中', subscribed:'已订阅', free:'免费',
   trial_eligible:'可试用', expired:'已过期', invalid:'已失效',
@@ -3166,13 +3191,7 @@ async function initAarSettings(){
   try{
     // 立刻渲染骨架，别让页面空着等接口
     renderAsPanel();
-    const [opts, cfg, mBox, cBox, sBox] = await Promise.all([
-      aarApi('/config/options'),
-      aarApi('/config'),
-      aarApi('/provider-settings?provider_type=mailbox').catch(()=>[]),
-      aarApi('/provider-settings?provider_type=captcha').catch(()=>[]),
-      aarApi('/provider-settings?provider_type=sms').catch(()=>[]),
-    ]);
+    const [opts, cfg, mBox, cBox, sBox] = await aarSettingsLoadWithRetry();
     window.__asOpts = opts; window.__asCfg = cfg;
     window.__asOpts.mailbox_settings = mBox;
     window.__asOpts.captcha_settings = cBox;

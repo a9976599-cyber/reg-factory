@@ -71,6 +71,18 @@ NEW_LOOSE_MODULES = [
     "common/env_refresh.py",
     "common/sms.py",
     "common/session_export.py",
+    # 2.3.3：审计修复给「松散脚本 / 影子模块」引进了这些官方 PYZ 里【不存在】的新
+    # 模块。真机验证（reg-factory.exe -u --task 探针，在冻结进程内 import）：
+    # 缺了它们运行期会 ModuleNotFoundError ——
+    #   common.async_io    <- mailbox_broker.py / register.py / register_outlook_standalone.py
+    #   common.atomic_io   <- common/session_export.py
+    #   common.run_context <- outlook_reg_loop.py / register_outlook_standalone.py
+    #   common.path_guard  <- tools/binary_patch/wrapper_entry.py（T34；重打 exe 入口时用）
+    # 冻结进程的 common 包 __path__ 指向 _internal/common，松散文件可被命中导入。
+    "common/async_io.py",
+    "common/atomic_io.py",
+    "common/run_context.py",
+    "common/path_guard.py",
 ]
 
 # 2.3.0 新增：影子加载模块。
@@ -138,6 +150,10 @@ CONTENT_GUARDS = [
     ("_internal/webui/embedded_backends.py", b"_WATCHDOG_SECONDS"),
     ("_internal/webui/embedded_backends.py", b"_lazy_retry_engines"),
     ("_internal/webui/embedded_backends.py", b"def try_start_embedded"),
+    # 2.3.3：松散层依赖的新 common 模块必须真的进包，否则运行期 ImportError
+    ("_internal/common/async_io.py", b"async def to_thread"),
+    ("_internal/common/atomic_io.py", b"def write_json_atomic"),
+    ("_internal/common/run_context.py", b"ContextVar"),
 ]
 
 # 不得出现在发布物【脚本】里的上游标识。

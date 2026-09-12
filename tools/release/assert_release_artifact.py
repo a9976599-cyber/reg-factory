@@ -57,6 +57,38 @@ def read(root, rel):
         return fh.read()
 
 
+# 运行期产物：绝不允许进包。
+# 已核对官方 2.3.2 原始 zip：.log/.db/.db-wal/.db-shm/.sqlite/.sqlite3/.lock 的
+# 条目数恒为 0，且不含 runtime/state 目录 —— 因此按扩展名 + 路径一票否决不会误伤。
+# （历史教训：2.3.3 打包时运行期往包内写了 6 个 db/lock/state 文件，而旧闸门只查
+#  「顶层 .log」，全部漏过仍报 PASS。运行期数据一旦随包发布，用户首启就会带着
+#  别人的账号库/中间态，属于隐私与一致性双重事故。）
+RUNTIME_SUFFIXES = (
+    ".log", ".db", ".db-wal", ".db-shm",
+    ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm",
+    ".lock",
+)
+RUNTIME_PATH_PARTS = ("runtime/state",)
+
+
+def runtime_artifact_hits(pkg):
+    """扫出包内所有「运行期产物」，返回 [(类别, 相对路径), ...]（应为空）。"""
+    hits = []
+    for dirpath, _dirnames, filenames in os.walk(pkg):
+        for f in filenames:
+            rel = os.path.relpath(os.path.join(dirpath, f), pkg).replace("\\", "/")
+            low = rel.lower()
+            if f == ".env":
+                hits.append(("真实 .env", rel))
+            elif f.startswith("auto_free_auth"):
+                hits.append(("授权缓存", rel))
+            elif low.endswith(RUNTIME_SUFFIXES):
+                hits.append(("运行期产物(日志/库/锁)", rel))
+            elif any(part in low for part in RUNTIME_PATH_PARTS):
+                hits.append(("运行期状态目录", rel))
+    return hits
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pkg")
@@ -117,17 +149,8 @@ def main():
               "exe md5 == %s" % args.expect_exe_md5)
 
     print("\n[4] 卫生：不该进包的东西")
-    bad = []
-    for dirpath, dirnames, filenames in os.walk(pkg):
-        for f in filenames:
-            rel = os.path.relpath(os.path.join(dirpath, f), pkg).replace("\\", "/")
-            if f == ".env":
-                bad.append(("真实 .env", rel))
-            elif f.startswith("auto_free_auth"):
-                bad.append(("授权缓存", rel))
-            elif f.lower().endswith(".log") and rel.count("/") <= 1:
-                bad.append(("顶层日志", rel))
-    check(not bad, "无 .env / 授权缓存 / 顶层日志", str(bad[:5]))
+    bad = runtime_artifact_hits(pkg)
+    check(not bad, "无 .env / 授权缓存 / 运行期产物", str(bad[:5]))
 
     print("\n[5] 脚本里不得残留上游标识")
     hits = []

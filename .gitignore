@@ -35,6 +35,7 @@ codex_k12/
 runtime/
 .reg-factory-data/
 server*.log
+reg-factory-*.log
 
 # 发布脚本
 scripts/publish-release.ps1

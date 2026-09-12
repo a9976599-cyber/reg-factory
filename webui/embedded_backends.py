@@ -33,10 +33,12 @@ v4 行为：
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import threading
 import time
 import traceback
+import urllib.request
 from pathlib import Path
 
 ENGINE_REL = "engine"
@@ -57,9 +59,7 @@ _log_lock = threading.Lock()
 _LOG_PATH: str | None = None
 
 _state = {"tried": False, "aar": False, "oar": False}
-# T9: 改用 RLock 以允许同线程在持锁状态再调用 status()/try_start_embedded()
-# 时不会自死锁（比如重试循环里再查询 state）。
-_state_lock = threading.RLock()
+_state_lock = threading.RLock()  # 可重入：try_start_embedded 持锁调用 status() 曾因 Lock 不可重入而死锁，拖垮主面板启动
 
 # v4 内部簿记（官方版本没有的私有状态）
 _threads = {"aar": None, "oar": None}          # tag -> 正在跑的启动线程或 None
@@ -97,6 +97,82 @@ def _port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.3)
         return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _engine_health_ok(port: int) -> bool:
+    """端口被占用时，确认上面的引擎是否真在响应。
+
+    v4+ 修复「僵尸复用」：外部/旧实例若健康则应当复用（不重复拉起重型引擎）；
+    若端口开着却无任何 HTTP 响应，则是崩溃/卡死的僵尸进程，应杀掉重启，而非
+    盲目相信「端口在占用 == 引擎已就绪」（旧逻辑会因此把桥接指向死引擎 → 502）。
+    """
+    for path in ("/api/health", "/api/status", "/health", "/"):
+        url = "http://127.0.0.1:%d%s" % (port, path)
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if 200 <= resp.status < 500:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def _pid_for_port(port: int):
+    """返回占用端口的 LISTENING PID（Windows netstat 解析）；查不到返回 None。
+
+    注意：netstat 在中文等非 UTF-8 代码页下输出含非 UTF-8 字节，必须用 bytes
+    读取再按 utf-8/latin-1 容错解码，否则 text=True 会抛 UnicodeDecodeError。
+    """
+    try:
+        raw = subprocess.check_output(
+            ["netstat", "-ano"], stderr=subprocess.DEVNULL, timeout=5
+        )
+    except Exception:
+        return None
+    try:
+        text = raw.decode("utf-8", "replace")
+    except Exception:
+        text = raw.decode("latin-1", "replace")
+    for line in text.splitlines():
+        if (":%d" % port) in line and "LISTENING" in line:
+            for p in reversed(line.split()):
+                if p.isdigit():
+                    return int(p)
+    return None
+
+
+def _kill_pid(pid) -> bool:
+    try:
+        subprocess.call(
+            ["taskkill", "/F", "/PID", str(pid)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _launch_or_reuse(tag: str, port: int) -> bool:
+    """端口占用处理（v4+ 僵尸自愈）：
+
+    - 目录缺失 → 不启动，返回 False；
+    - 端口空闲 → 直接后台拉起，返回 False（就绪由线程回写 _state）；
+    - 端口占用且引擎健康 → 复用，返回 True（视为已就绪）；
+    - 端口占用但引擎无响应（僵尸）→ 杀掉占用进程后重新拉起，返回 False。
+    """
+    if _port_in_use(port):
+        if _engine_health_ok(port):
+            _log("port %d in use but %s engine healthy, reuse (no duplicate launch)" % (port, tag))
+            return True
+        pid = _pid_for_port(port)
+        if pid:
+            _log("port %d held by unresponsive process pid=%d, killing to restart %s" % (port, pid, tag))
+            _kill_pid(pid)
+            time.sleep(0.5)
+    _log("embed %s: launching in background (port %d)" % (tag, port))
+    _spawn_engine(tag)
+    return False
 
 
 def status() -> dict:
@@ -166,9 +242,17 @@ def _lazy_retry_engines() -> None:
             continue  # 重试预算耗尽（真实 bug 交给人看日志）
         if now - _last_attempt.get(tag, 0.0) < _RETRY_COOLDOWN:
             continue  # 冷却中
+        # v4+ 僵尸自愈：端口被占用但无响应 → 杀掉僵尸后补启；健康则复用
         if _port_in_use(port):
-            # 端口被外部实例占用：视为正常，不再折腾
-            _state[tag] = True
+            if _engine_health_ok(port):
+                _state[tag] = True  # 外部/旧实例健康引擎，复用
+            else:
+                pid = _pid_for_port(port)
+                if pid:
+                    _log("[%s] killing unresponsive pid=%d holding :%d, retry" % (tag, pid, port))
+                    _kill_pid(pid)
+                    time.sleep(0.5)
+                _spawn_engine(tag)
             continue
         _log("[%s] lazy-retry embedded start (attempt %d)" % (tag, _attempts[tag] + 1))
         _retries[tag] += 1
@@ -195,23 +279,13 @@ def try_start_embedded() -> dict:
     oar_dir = base / ENGINE_REL / OAR_SUBDIR
 
     if (aar_dir / "main.py").exists():
-        if _port_in_use(DEFAULT_AAR_PORT):
-            _log("port %d already in use, skip embedded A" % DEFAULT_AAR_PORT)
-            _state["aar"] = True
-        else:
-            _log("embed A: launching in background from %s" % aar_dir)
-            _spawn_engine("aar")
+        _state["aar"] = _launch_or_reuse("aar", DEFAULT_AAR_PORT)
     else:
         _log("A engine not found at %s" % aar_dir)
         _missing_dir["aar"] = True
 
     if (oar_dir / "webapp").is_dir():
-        if _port_in_use(DEFAULT_OAR_PORT):
-            _log("port %d already in use, skip embedded O" % DEFAULT_OAR_PORT)
-            _state["oar"] = True
-        else:
-            _log("embed O: launching in background from %s" % oar_dir)
-            _spawn_engine("oar")
+        _state["oar"] = _launch_or_reuse("oar", DEFAULT_OAR_PORT)
     else:
         _log("O engine not found at %s" % oar_dir)
         _missing_dir["oar"] = True

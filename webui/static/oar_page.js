@@ -14,6 +14,16 @@ async function oarApi(path, opts={}){
   return data;
 }
 function oarJpost(path, body){ return oarApi(path, {method:'POST', body:JSON.stringify(body||{})}); }
+// 引擎冷启动(首次解压需 1-3 分钟)或上一实例僵尸期间，主控制台桥接会返回 502。
+// 这里自动重试，面板无需手动刷新即可在引擎就绪后自愈（不会再「一直转圈/空白」）。
+async function oarApiRetry(path, opts={}, tries=40, gap=5000){
+  let lastErr;
+  for(let i=0;i<tries;i++){
+    try{ return await oarApi(path, opts); }
+    catch(e){ lastErr=e; if(i<tries-1) await new Promise(r=>setTimeout(r, gap)); }
+  }
+  throw lastErr;
+}
 
 /* ---------- 小工具 ---------- */
 const OAR = {
@@ -138,7 +148,7 @@ function renderOarStatCards(boxId, items){
 }
 async function loadOarJobs(){
   try{
-    const j=await oarApi('/jobs');
+    const j=await oarApiRetry('/jobs');
     OAR.jobs=j.jobs||[];
     const tb=O$('oar-jobsBody');
     if(tb){
@@ -153,7 +163,10 @@ async function loadOarJobs(){
       }).join('');
     }
     setTxt('oar-acc-count', String(OAR.jobs.length));
-  }catch(e){}
+  }catch(e){
+    const tb=O$('oar-jobsBody');
+    if(tb) tb.innerHTML='<tr><td colspan="7" class="muted">O 引擎未就绪：'+(e&&e.message?e.message:'')+'，请稍候刷新</td></tr>';
+  }
 }
 function setTxt(id,v){ const el=O$(id); if(el) el.textContent=v; }
 
@@ -161,7 +174,7 @@ function setTxt(id,v){ const el=O$(id); if(el) el.textContent=v; }
 async function loadOarRegisterConfig(){
   if(OAR.CFG){ fillOarRegForm(); return; }
   try{
-    const c=await oarApi('/config'); OAR.CFG=c;
+    const c=await oarApiRetry('/config'); OAR.CFG=c;
     O$('oar-pxMode').innerHTML=(c.px_modes||[]).map(m=>`<option>${escHtml(m)}</option>`).join('');
     const products=c.product_modes||[{id:'graph',label:'Graph 四段式'},{id:'graph_recovery',label:'Graph 六段式（推荐）'}];
     const def=c.default_token_mode||'graph';
@@ -288,7 +301,7 @@ function oarRenderSummary(s){
 /* ---------- 账号池 ---------- */
 async function loadOarAccounts(){
   try{
-    const j=await oarApi('/accounts');
+    const j=await oarApiRetry('/accounts');
     OAR.ACCOUNTS=j.accounts||[];
     oarRenderStats(j.stats);
     oarRenderBatchFilter();
